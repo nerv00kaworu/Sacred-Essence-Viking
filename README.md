@@ -55,6 +55,7 @@ $$Current = Initial \times S^{days} + \ln(1 + D)$$
 #### 環境要求
 - **Python 3.10+**
 - **必備靈媒 (Dependencies)**: `numpy`, `sentence-transformers`
+- **預設模型**: `all-MiniLM-L6-v2` (本地執行，~80MB)
 
 #### 安裝步驟
 1. 召喚代碼庫：
