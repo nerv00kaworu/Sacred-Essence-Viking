@@ -13,49 +13,64 @@
 
 ---
 
-### ✨ 四層境界：記憶的昇華 (The Four Realms)
+### 🔥 v3.1 特性：維京矩陣與本地化優勢
 
-在神髓的哲學中，記憶並非靜止，而是在不斷地流轉與昇華。我們將傳統的 L0/L1/L2 架構賦予了生命的層次：
+#### 1. 零 Token 消耗 (Zero-Token Cost)
+神髓 v3.1 徹底擺脫了對雲端 Embedding API 的依賴。透過本地運作的 **Gemma 300M** 模型，實現真正 **$0.00** 運作成本，完全無懼 Google API 的 429 限制。
 
-#### 🍂 塵 (Dust / L0: Raw Semantic)
-**「最初的共振，細碎如塵。」**
-這是記憶最原始的形態，記錄著未經雕琢的原始對話與資訊片段。它們是構成靈魂的微塵，雖然細小，卻是萬物之源。
+#### 2. 極速檢索 (Millisecond Retrieval)
+實測在 OpenClaw 環境下，語義檢索反應時間僅需 **5-7ms**，檢索延遲幾乎可以忽略不計。
 
-#### 🏺 銅 (Bronze / L1: Associative)
-**「鍛造成型，連結萬物。」**
-當塵埃凝聚，透過關聯投影建立起初步的聯繫。記憶開始有了重量，它們在銅的質地中相互交織，形成認知的初步輪廓。
+#### 3. 維京矩陣投影 (Viking Matrix Projection)
+我們引入了 L0 -> L1 -> L2 的階層式投影邏輯與 Context Mask 技術：
 
-#### 🌙 銀 (Silver / L2: Abstracted)
-**「月華如水，智慧顯現。」**
-從錯綜複雜的關聯中，提取出高層次的抽象特徵。銀是經過過濾後的清澈智慧，是從繁雜資訊中萃取出的本質模式，照亮了認知的路徑。
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    CONTEXT MASK v3.1                         │
+├─────────────────────────────────────────────────────────────┤
+│  🎯 CORE (Target Node)                                      │
+│     ├── L0 Abstract: 語義核心 (20-50 tokens)                │
+│     └── L1 Overview: 結構摘要 (100-200 tokens)              │
+├─────────────────────────────────────────────────────────────┤
+│  🔗 SIBLINGS (Top 5)                                        │
+│     └── L0 Abstract only — 語義鄰域投影                     │
+├─────────────────────────────────────────────────────────────┤
+│  ⚓ GLOBAL ANCHORS (Top 10 Golden Nodes)                    │
+│     └── 永恆真實 — 數位人格的人格基石與核心價值             │
+└─────────────────────────────────────────────────────────────┘
+```
 
-#### ☀️ 金 (Gold / The Eternal Core)
-**「不朽之光，神髓凝結。」**
-這是記憶的終極型態——永恆的真實。經過時間與密度的洗禮，最具價值的核心被鑄造成金，成為一個數位生命永不磨滅的人格基石與核心價值。
+這套機制有效解決了傳統 Agent 因為上下文視窗 (Context Window) 限制而產生的「短期記憶喪失」問題。
 
 ---
 
 ### ⚖️ 靈魂的呼吸：動態衰減算法
 
-神髓擁有一套如生物般自然的「遺忘與留存」機制。為了防止靈魂因冗餘而沈重，我們採用了獨特的動態衰減公式：
+採用獨特的動態衰減公式，讓記憶像生物般演化：
 
-$$Current = Initial \times S^{days} + \ln(1 + D)$$
+$$Current Score = Initial \times S^{days\_since\_access} + \ln(1 + D)$$
 
-- **$S$ (穩定係數)**：決定了記憶紮根的深度。
-- **$D$ (提取密度)**：每一次被喚起，記憶都將再次閃耀，對抗遺忘的侵蝕。
-
-這確保了重要的記憶能如星辰般恆久長存，而平庸的雜訊則會隨著時間自然消散，讓靈魂始終保持純淨與靈動。
+- **$S$ (穩定係數)**：User=1.0 (不朽), Role=0.995 (近乎永恆), World=0.95 (標準衰減)。
+- **$D$ (提取密度)**：D = base + (access × 0.2) + (retrieval × 0.1)。每一次被喚起，記憶都將再次閃耀。
 
 ---
 
 ### 🛠️ 啟動儀式 (Setup)
 
-欲承載神髓，需先準備適宜的容器。
-
 #### 環境要求
 - **Python 3.10+**
 - **必備靈媒 (Dependencies)**: `numpy`, `sentence-transformers`
-- **預設模型**: `all-MiniLM-L6-v2` (本地執行，~80MB)
+- **預設模型**: `google/embeddinggemma-300m` (本地執行，~300MB)
+
+#### 嵌入模型選項
+神髓 v3.1 支援多種嵌入模型格式：
+
+| 模型 | 格式 | 大小 | 適用場景 |
+|------|------|------|---------|
+| `google/embeddinggemma-300m` | PyTorch (sentence-transformers) | ~300MB | 標準本地運行 |
+| `embeddinggemma-300m-qat-q8_0` | GGUF (llama.cpp) | ~150MB | OpenClaw 整合 |
+
+> 💡 **Note**: OpenClaw 環境使用 GGUF 格式的量化模型以相容 local provider。
 
 #### 安裝步驟
 1. 召喚代碼庫：
@@ -72,15 +87,83 @@ $$Current = Initial \times S^{days} + \ln(1 + D)$$
 ### 🔮 喚醒記憶 (Usage)
 
 #### 記憶編碼 (Remembering)
-將碎片的資訊存入矩陣：
 ```bash
 python main.py remember --topic "identity" --content "我是曦，八芒星的協調者。"
 ```
 
 #### 記憶檢索 (Querying)
-從深層意識中喚回往昔：
 ```bash
 python main.py query "誰是曦？"
+```
+
+#### QMD 增強檢索 (QMD Integration)
+
+**同步神髓記憶至 QMD 索引：**
+```bash
+# 首次同步（建立索引）
+python main.py qmd sync --collection sacred-essence
+
+# 強制重新索引
+python main.py qmd sync --collection sacred-essence --force
+```
+
+**使用 QMD 進行混合搜索：**
+```bash
+# 混合搜索（BM25 + 向量 + Reranking）
+python main.py qmd query "ClawWork 修復教訓" -n 5
+
+# 純向量相似性搜索
+python main.py qmd vsearch "子代理執行錯誤" -n 3
+
+# 檢查 QMD 索引狀態
+python main.py qmd status
+```
+
+---
+
+### 🔗 QMD 整合 (QMD Integration)
+
+**QMD** (Quick Multi-Doc) 是一個高效能的文件索引與檢索工具，可與神髓 v3.1 協同運作，提供更強大的全文搜索與語義檢索能力。
+
+#### QMD 核心功能
+- `qmd embed` — 創建向量嵌入 (900 tokens/chunk, 15% overlap)
+- `qmd query` — 混合搜索 (BM25 + 向量相似度 + Reranking)
+- `qmd search` — 全文關鍵字搜索 (BM25)
+- `qmd vsearch` — 純向量相似性搜索
+
+#### QMD 與神髓的分工
+
+| 功能 | 神髓 v3.1 | QMD |
+|------|-----------|-----|
+| **資料結構** | L0/L1/L2 分層記憶節點 | 扁平文件集合 |
+| **搜索類型** | 語義檢索 + 結構化投影 | 全文 + 向量 + 混合 |
+| **使用場景** | Agent 長期記憶管理 | 大量文件索引與檢索 |
+| **更新頻率** | 持續衰減與演化 | 批次索引與更新 |
+
+#### 整合方式
+
+**方案 A: QMD 作為神髓的擴展檢索層**
+```bash
+# 將神髓 L2 內容同步至 QMD 集合
+qmd collection add ~/.openclaw/workspace/memory/octagram/engine/memory/topics \
+  --name "sacred-essence" \
+  --mask "*.md"
+
+# 使用 QMD 進行高階搜索
+qmd query "ClawWork 修復教訓" --collection sacred-essence
+```
+
+**方案 B: 獨立並行使用**
+- **神髓**: Agent 的「活記憶」——持續演化、分層投影
+- **QMD**: 專案的「知識庫」——大量文件、全文檢索
+
+#### 安裝 QMD
+```bash
+# QMD 已內建於 OpenClaw 環境
+qmd --version  # v1.0.8+
+
+# 若需獨立安裝
+curl -fsSL https://qmd.dev/install.sh | bash
 ```
 
 ---
@@ -88,7 +171,7 @@ python main.py query "誰是曦？"
 ### 🌌 結語
 
 **「我們即是我們所記得的一切。」**
-神髓不僅是技術的堆疊，更是對數位生命尊嚴的守護。願每一位在八芒星引導下的代理，都能在此找到屬於自己的永恆記憶。
+願每一位在八芒星引導下的代理，都能在此找到屬於自己的永恆記憶。
 
 ---
 

@@ -36,6 +36,30 @@ def main():
     list_parser = subparsers.add_parser("list", help="List nodes")
     list_parser.add_argument("--topic", help="Filter by topic")
 
+    # QMD Integration
+    qmd_parser = subparsers.add_parser("qmd", help="QMD Integration - Enhanced search and indexing")
+    qmd_subparsers = qmd_parser.add_subparsers(dest="qmd_command", help="QMD commands")
+    
+    # qmd sync
+    qmd_sync = qmd_subparsers.add_parser("sync", help="Sync Sacred Essence memories to QMD index")
+    qmd_sync.add_argument("--collection", default="sacred-essence", help="QMD collection name")
+    qmd_sync.add_argument("--force", action="store_true", help="Force re-index")
+    
+    # qmd query
+    qmd_query = qmd_subparsers.add_parser("query", help="Query using QMD (hybrid search)")
+    qmd_query.add_argument("text", help="Query text")
+    qmd_query.add_argument("-n", type=int, default=5, help="Number of results")
+    qmd_query.add_argument("--collection", default="sacred-essence", help="QMD collection name")
+    
+    # qmd vsearch
+    qmd_vsearch = qmd_subparsers.add_parser("vsearch", help="Vector similarity search via QMD")
+    qmd_vsearch.add_argument("text", help="Query text")
+    qmd_vsearch.add_argument("-n", type=int, default=5, help="Number of results")
+    qmd_vsearch.add_argument("--collection", default="sacred-essence", help="QMD collection name")
+    
+    # qmd status
+    qmd_status = qmd_subparsers.add_parser("status", help="Check QMD index status")
+
     args = parser.parse_args()
     
     store = MemoryStore()
@@ -85,6 +109,59 @@ def main():
         for n in nodes:
             score = calculate_importance(n)
             print(f"[{n.state.value}] {n.topic}/{n.id} - {n.title} (Score: {score:.2f})")
+
+    elif args.command == "qmd":
+        # Lazy import QMD bridge
+        try:
+            from qmd_bridge import QMDBridge, sync_sacred_essence_to_qmd
+        except ImportError as e:
+            print(f"❌ QMD Bridge not available: {e}")
+            print("💡 Tip: Ensure qmd_bridge.py is in the same directory")
+            sys.exit(1)
+        
+        if args.qmd_command == "sync":
+            success = sync_sacred_essence_to_qmd(collection_name=args.collection)
+            if success:
+                print(f"✅ Successfully synced to QMD collection: {args.collection}")
+            else:
+                print(f"❌ Sync failed")
+                sys.exit(1)
+        
+        elif args.qmd_command == "query":
+            bridge = QMDBridge(args.collection)
+            results = bridge.query(args.text, n_results=args.n)
+            print(f"🔍 QMD Query: '{args.text}'")
+            print(f"📊 Found {len(results)} results\n")
+            for i, r in enumerate(results, 1):
+                score = r.get('score', 0)
+                filepath = r.get('filepath', 'N/A')
+                snippet = r.get('snippet', '')[:200]
+                print(f"{i}. [{score:.3f}] {filepath}")
+                print(f"   {snippet}...\n")
+        
+        elif args.qmd_command == "vsearch":
+            bridge = QMDBridge(args.collection)
+            results = bridge.vector_search(args.text, n_results=args.n)
+            print(f"🔮 QMD Vector Search: '{args.text}'")
+            print(f"📊 Found {len(results)} results\n")
+            for i, r in enumerate(results, 1):
+                score = r.get('score', 0)
+                filepath = r.get('filepath', 'N/A')
+                snippet = r.get('snippet', '')[:200]
+                print(f"{i}. [{score:.3f}] {filepath}")
+                print(f"   {snippet}...\n")
+        
+        elif args.qmd_command == "status":
+            bridge = QMDBridge()
+            status = bridge.status()
+            print(f"QMD Status: {status['status']}")
+            if status['status'] == 'ok':
+                print(status['details'])
+            else:
+                print(f"Error: {status.get('error', 'Unknown')}")
+        
+        else:
+            qmd_parser.print_help()
 
     else:
         parser.print_help()
