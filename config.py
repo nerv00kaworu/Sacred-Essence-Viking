@@ -39,4 +39,4 @@ WEIGHT_RETRIEVAL = 0.1   # Reading/Projecting
 # Similarity Constants
 SIMILARITY_THRESHOLD = 0.75  # > 0.75 -> Potential duplicate
 MERGE_THRESHOLD = 0.85       # > 0.85 -> Auto-merge (increment access_count only)
-EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
+EMBEDDING_MODEL = 'google/embeddinggemma-300m'

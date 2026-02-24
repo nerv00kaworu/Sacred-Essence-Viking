@@ -12,13 +12,11 @@ try:
         GRACE_PERIOD_DAYS, 
         DENSITY_BASE, 
         WEIGHT_ACCESS, 
-        WEIGHT_RETRIEVAL,
-        EMBEDDING_MODEL
+        WEIGHT_RETRIEVAL
     )
     from models import MemoryNode
 except ImportError:
     # Fallback or local dev
-    EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
     pass
 
 def calculate_density(node: 'MemoryNode') -> float:
@@ -98,7 +96,7 @@ def get_embedding(text: str) -> List[float]:
         try:
             from sentence_transformers import SentenceTransformer
             # Using the model specified in config or default
-            _model_cache = SentenceTransformer(EMBEDDING_MODEL)
+            _model_cache = SentenceTransformer('google/embeddinggemma-300m')
         except ImportError:
             print("Warning: sentence-transformers not installed. Returning dummy vector.")
             return [0.0] * 384 # Dummy 384-dim vector for testing without deps
