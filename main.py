@@ -1,10 +1,12 @@
 # Sacred Essence v3.1 CLI
+# 神髓記憶系統 - 整合 QMD 深度搜索
 
 import argparse
 import sys
 import os
 from datetime import datetime
 from uuid import uuid4
+from typing import Set
 
 from storage import MemoryStore
 from models import MemoryNode, NodeState
@@ -42,20 +44,33 @@ def main():
     
     # qmd sync
     qmd_sync = qmd_subparsers.add_parser("sync", help="Sync Sacred Essence memories to QMD index")
-    qmd_sync.add_argument("--collection", default="sacred-essence", help="QMD collection name")
+    qmd_sync.add_argument("--collection", default="sacred-l2", help="QMD collection name")
     qmd_sync.add_argument("--force", action="store_true", help="Force re-index")
+    qmd_sync.add_argument("--filter-states", nargs="+", choices=["GOLDEN", "SILVER", "BRONZE", "DUST"],
+                         help="Only sync nodes with specified states")
     
     # qmd query
     qmd_query = qmd_subparsers.add_parser("query", help="Query using QMD (hybrid search)")
     qmd_query.add_argument("text", help="Query text")
     qmd_query.add_argument("-n", type=int, default=5, help="Number of results")
-    qmd_query.add_argument("--collection", default="sacred-essence", help="QMD collection name")
+    qmd_query.add_argument("--collection", default="sacred-l2", help="QMD collection name")
     
     # qmd vsearch
     qmd_vsearch = qmd_subparsers.add_parser("vsearch", help="Vector similarity search via QMD")
     qmd_vsearch.add_argument("text", help="Query text")
     qmd_vsearch.add_argument("-n", type=int, default=5, help="Number of results")
-    qmd_vsearch.add_argument("--collection", default="sacred-essence", help="QMD collection name")
+    qmd_vsearch.add_argument("--collection", default="sacred-l2", help="QMD collection name")
+    
+    # qmd constrained-search (限縮搜索)
+    qmd_constrained = qmd_subparsers.add_parser("constrained-search", 
+        help="Search within specified node whitelist (限縮搜索)")
+    qmd_constrained.add_argument("text", help="Query text")
+    qmd_constrained.add_argument("--nodes", nargs="+", required=True, 
+        help="Node ID whitelist to search within")
+    qmd_constrained.add_argument("-n", type=int, default=5, help="Number of results")
+    qmd_constrained.add_argument("--type", choices=["hybrid", "vector", "keyword"], 
+        default="hybrid", help="Search type")
+    qmd_constrained.add_argument("--collection", default="sacred-l2", help="QMD collection name")
     
     # qmd status
     qmd_status = qmd_subparsers.add_parser("status", help="Check QMD index status")
@@ -90,9 +105,28 @@ def main():
         
         node.content_path = content_file
 
-        # Save node
+        # Save node to Sacred Essence
         store.save_node(node)
-        print(f"Encoded memory: {node.topic}/{node.id} - {node.title}")
+        print(f"✅ Encoded to Sacred Essence: {node.topic}/{node.id} - {node.title}")
+        
+        # Auto-sync to QMD (方案 B: 自動同步)
+        try:
+            from qmd_bridge import QMDBridge
+            print(f"🔄 Auto-syncing L2 content to QMD...")
+            bridge = QMDBridge("sacred-l2")
+            sync_success = bridge.sync_node_to_qmd(
+                node_id=node_id,
+                topic=args.topic,
+                content=args.content,
+                state="SILVER",
+                parent_id=None
+            )
+            if sync_success:
+                print(f"✅ Synced to QMD: {node_id}")
+            else:
+                print(f"⚠️  QMD sync failed (non-critical)")
+        except Exception as e:
+            print(f"⚠️  QMD sync skipped: {e}")
 
     elif args.command == "gc":
         print(f"Running Garbage Collection (Dry Run: {not args.execute})...")
@@ -120,7 +154,10 @@ def main():
             sys.exit(1)
         
         if args.qmd_command == "sync":
-            success = sync_sacred_essence_to_qmd(collection_name=args.collection)
+            success = sync_sacred_essence_to_qmd(
+                collection_name=args.collection,
+                filter_states=args.filter_states
+            )
             if success:
                 print(f"✅ Successfully synced to QMD collection: {args.collection}")
             else:
@@ -150,6 +187,29 @@ def main():
                 snippet = r.get('snippet', '')[:200]
                 print(f"{i}. [{score:.3f}] {filepath}")
                 print(f"   {snippet}...\n")
+        
+        elif args.qmd_command == "constrained-search":
+            # 限縮搜索：神髓定界 + QMD 深潛
+            bridge = QMDBridge(args.collection)
+            node_whitelist: Set[str] = set(args.nodes)
+            
+            print(f"🔍 Constrained Search: '{args.text}'")
+            print(f"🎯 Node Whitelist: {node_whitelist}\n")
+            
+            results = bridge.constrained_search(
+                query_text=args.text,
+                node_whitelist=node_whitelist,
+                n_results=args.n,
+                search_type=args.type
+            )
+            
+            print(f"📊 Found {len(results)} results within whitelist\n")
+            for i, r in enumerate(results, 1):
+                score = r.get('score', 0)
+                node_id = r.get('node_id', 'N/A')
+                content_preview = r.get('content', '')[:150].replace('\n', ' ')
+                print(f"{i}. [{score:.3f}] Node: {node_id}")
+                print(f"   {content_preview}...\n")
         
         elif args.qmd_command == "status":
             bridge = QMDBridge()
