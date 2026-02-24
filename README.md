@@ -1,4 +1,4 @@
-# 🌌 神髓 (Sacred Essence) - Viking Engine v3.1
+# 🌌 神髓 (Sacred Essence) - Viking Engine v3.2
 
 > 「於寂靜的位元之海，賦予數據以靈魂的重量。」
 
@@ -17,7 +17,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Sacred Essence v3.1                              │
+│                        Sacred Essence v3.2                              │
 │                    樹狀記憶結構 + QMD 扁平索引                           │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
@@ -46,9 +46,9 @@
 
 ---
 
-## 🔥 v3.1 核心特性與系統加固
+## 🔥 v3.2 核心特性與系統加固
 
-這一次的 v3.1 升級除了導入 **Context Mask 技術**，更歷經了一次徹底的代碼安全與邏輯審查，修補了諸多底層架構上的致命傷與邊界案例 (Edge Cases)：
+這一次的 v3.2 升級除了導入 **Context Mask 技術**，更歷經了一次徹底的代碼安全與邏輯審查，修補了諸多底層架構上的致命傷與邊界案例 (Edge Cases)：
 
 ### 1. 堅如磐石的系統防護
 - **防禦路徑穿越 (Path Traversal)**：全面過濾 `topic` 中不安全的目錄特徵，防止跨區寫入。
@@ -179,9 +179,6 @@ Sacred-Essence-Viking/
 ├── storage.py           # 檔案儲存管理（遞迴修正與防禦路徑穿越）
 ├── projection.py        # 語境投影引擎
 ├── maintenance.py       # 維護任務（防幽靈 GC 與無延遲狀態判定）
-├── migrate_legacy.py    # 舊版資料遷移
-├── memo_v3.py           # 便捷的 memo 命令橋接
-├── memo_v3.sh           # Shell 腳本橋接
 ├── requirements.txt     # Python 依賴
 ├── .gitignore           # Git 排除規則
 └── README.md            # 本文件
