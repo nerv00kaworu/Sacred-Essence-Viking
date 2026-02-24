@@ -57,9 +57,10 @@ def calculate_importance(node: 'MemoryNode', current_date: datetime = None) -> f
     density = calculate_density(node)
     
     # 4. Formula
-    # Current = Initial * (S ^ days_unused) + ln(1 + D)
+    # Current = Initial * (S ^ days_unused) + min(MAX_DENSITY_BONUS, ln(1 + D))
+    MAX_DENSITY_BONUS = 5.0 # Prevent infinite score growth
     decay_term = INITIAL_IMPORTANCE * (math.pow(s_factor, days_unused))
-    growth_term = math.log(1 + density)
+    growth_term = min(MAX_DENSITY_BONUS, math.log(1 + density))
     
     current_score = decay_term + growth_term
     return current_score
@@ -73,6 +74,10 @@ def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
     
     v1 = np.array(vec1)
     v2 = np.array(vec2)
+    
+    if v1.shape != v2.shape:
+        print(f"Warning: Vector dimension mismatch ({v1.shape} vs {v2.shape}).")
+        return 0.0
     
     dot_product = np.dot(v1, v2)
     norm_v1 = np.linalg.norm(v1)

@@ -20,8 +20,12 @@ class MemoryStore:
         os.makedirs(TRASH_DIR, exist_ok=True)
 
     def _get_topic_dir(self, topic: str) -> str:
-        # Sanitize topic needed in real app, simplistic here
-        return os.path.join(MEMORY_DIR, "topics", topic)
+        # Sanitize topic to prevent path traversal vulnerabilities
+        import re
+        safe_topic = re.sub(r'[^a-zA-Z0-9_\-]', '', topic)
+        if not safe_topic:
+            safe_topic = "general"
+        return os.path.join(MEMORY_DIR, "topics", safe_topic)
 
     def _get_node_dir(self, topic: str, node_id: str) -> str:
         # Each node gets a directory to store L0/L1/L2 and metadata
@@ -103,11 +107,11 @@ class MemoryStore:
         """List all nodes, optionally filtered by topic."""
         nodes = []
         if topic:
-            search_path = os.path.join(self._get_topic_dir(topic), "*", "node.meta.json")
+            search_path = os.path.join(self._get_topic_dir(topic), "**", "node.meta.json")
         else:
-            search_path = os.path.join(MEMORY_DIR, "topics", "*", "*", "node.meta.json")
+            search_path = os.path.join(MEMORY_DIR, "topics", "**", "node.meta.json")
             
-        files = glob(search_path, recursive=True) # Recursive needed if * spans directories
+        files = glob(search_path, recursive=True) # Recursive required for **
         # Glob patterns:
         # topics/*/*/node.meta.json -> topics/TOPIC/NODE/node.meta.json
         

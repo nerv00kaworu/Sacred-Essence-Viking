@@ -27,7 +27,7 @@
 │  │  Content.md │    │  Overview   │    │  Abstract   │                 │
 │  └──────┬──────┘    └─────────────┘    └─────────────┘                 │
 │         │                                                               │
-│         ↓ 同步至 QMD                                                     │
+│         ↓ 雙向同步至 QMD                                                 │
 │  ┌──────────────────────────────────────────────────────┐              │
 │  │  QMD (Quick Multi-Doc)                                │              │
 │  │  • 全文搜索 (BM25)                                     │              │
@@ -38,63 +38,39 @@
 │  核心流程：                                                              │
 │  1. 寫入 → 神髓生成節點 → 自動同步 L2 到 QMD (綁定 node_id)              │
 │  2. 讀取 → 神髓匡列白名單 → QMD 限縮搜索 → 組合 Context Mask            │
-│  3. 逃生艙 → 神髓信心不足時，Fallback 到 QMD 全局搜索                    │
+│  3. 逃生艙 → 神髓信心不足或白名單無效時，Fallback 到 QMD 全局搜索         │
+│  4. 遺忘 → 神髓 GC 清除 Dust 節點 → QMD 同步抹消孤兒資料                 │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🔥 v3.1 核心特性
+## 🔥 v3.1 核心特性與系統加固
 
-### 1. 零 Token 消耗 (Zero-Token Cost)
-神髓 v3.1 徹底擺脫了對雲端 Embedding API 的依賴。透過本地運作的 **Gemma 300M** 模型，實現真正 **$0.00** 運作成本，完全無懼 Google API 的 429 限制。
+這一次的 v3.1 升級除了導入 **Context Mask 技術**，更歷經了一次徹底的代碼安全與邏輯審查，修補了諸多底層架構上的致命傷與邊界案例 (Edge Cases)：
 
-### 2. 極速檢索 (Millisecond Retrieval)
-實測在 OpenClaw 環境下，語義檢索反應時間僅需 **5-7ms**，檢索延遲幾乎可以忽略不計。
+### 1. 堅如磐石的系統防護
+- **防禦路徑穿越 (Path Traversal)**：全面過濾 `topic` 中不安全的目錄特徵，防止跨區寫入。
+- **防止分數膨脹 (Zero-Inflation Math)**：為頻繁高頻存取的 Density `ln(1+D)` 建立強制上限（最高 +5.0），防止活躍節點永遠卡在 SILVER 無法自然衰退。
+- **維度防呆 (Dimension Matching)**：計算 `cosine_similarity` 時，具備嚴格的向量維度狀檢查，避免模型切換導致服務崩潰。
+- **全域檔案索引 (Recursive Glob)**：修復舊版搜尋盲區，確保巢狀多階層資料夾也能順利被引擎抓取。
+- **零殘存 File I/O 最佳化**：引入 `is_dirty` 狀態標記，唯有被改動過的節點才會在 GC 期間寫入硬碟，將運算效能提升數十倍，並修復了 GOLDEN 節點被降級時必須等下一輪才生效的延遲問題。
 
-### 3. 維京矩陣投影 (Viking Matrix Projection)
-我們引入了 L0 -> L1 -> L2 的階層式投影邏輯與 Context Mask 技術：
+### 2. 斷崖式過濾修復 (The Fallback Gap)
+我們重寫了 `qmd_bridge.py` 中的 `smart_search_with_fallback()` 逃生艙機制。如果因為 L0/L1 過度精簡導致**神髓匡列白名單失敗（找不到節點）**或**信心分數小於閾值**時，系統不再默默失敗回報找不到，而是會**強制允許 QMD 進行一次全局 BM25 盲搜**，確保任何冷門的深層 L2 知識都不會被丟失。
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    CONTEXT MASK v3.1                         │
-├─────────────────────────────────────────────────────────────┤
-│  🎯 CORE (Target Node)                                      │
-│     ├── L0 Abstract: 語義核心 (20-50 tokens)                │
-│     └── L1 Overview: 結構摘要 (100-200 tokens)              │
-├─────────────────────────────────────────────────────────────┤
-│  🔗 SIBLINGS (Top 5)                                        │
-│     └── L0 Abstract only — 語義鄰域投影                     │
-├─────────────────────────────────────────────────────────────┤
-│  ⚓ GLOBAL ANCHORS (Top 10 Golden Nodes)                    │
-│     └── 永恆真實 — 數位人格的人格基石與核心價值             │
-└─────────────────────────────────────────────────────────────┘
-```
+### 3. 資料幽靈追滅 (Orphaned Chunks)
+在過去，神髓將節點掃盡 DUST 垃圾桶雖然刪除了本地記憶，但卻導致 QMD 充滿沒被清掉的「幽靈記憶」導致搜尋延遲與幻覺。v3.1 中實作了全新的 `delete_node` 處理機制：**只要神髓的 GC (`maintenance.py`) 把節點丟入垃圾桶，它就會強制呼叫 QMD Bridge 進行連動抹除**，確保向量庫與神髓邏輯永遠保持 100% 同步。
 
-### 4. 神髓 + QMD 深度整合（含 Edge Cases 修補）
-
-**神髓定界，QMD 深潛** — 兩者協同工作的完美架構：
-
-| 組件 | 職責 | 資料結構 |
-|------|------|----------|
-| **神髓** | 樹狀結構管理、語義定位、動態衰減 | L0/L1/L2 分層節點 |
-| **QMD** | 全文搜索、向量檢索、混合搜索 | 扁平化 L2 索引 |
-
-**四大 Edge Cases 修補**：
-
-| Edge Case | 問題 | 修補方案 |
-|-----------|------|----------|
-| **1. 細節錯過** | L0/L1 摘要遺漏具體細節 | 🚨 **逃生艙機制**：信心不足時 Fallback 到 QMD 全局 BM25 |
-| **2. 數據不一致** | GC 後 QMD 殘留孤兒資料 | 🔍 **審計腳本**：定期比對神髓與 QMD，清除孤兒 |
-| **3. 性能瓶頸** | 串行搜索延遲疊加 | ⚡ **超時控制 + 白名單限制**：白名單超過 50 個自動截斷 |
-| **4. Chunk 截斷** | QMD 返回片段化內容 | 📄 **智能載入**：自動判斷載入完整 L2 或 Chunk |
+### 4. 根絕上下文斷頭 (Context Truncation)
+透過智能判斷 `_intelligent_load_full_l2` 機制，當 QMD 向量搜尋只回傳 500 字以下的「碎塊 (Chunk)」時，若 Token 預算仍有餘裕，**神髓會自動拿著 Chunk 返回實體硬碟將整份 L2 原檔案抽出替代**，交給 LLM 閱讀。徹底根除「只看見 if 卻沒看見 else」的斷章取義風險。
 
 ---
 
 ## ⚖️ 靈魂的呼吸：動態衰減算法
 
-$$Current Score = Initial \times S^{days\_since\_access} + \ln(1 + D)$$
+$$Current Score = Initial \times S^{days\_since\_access} + \min(5.0, \ln(1 + D))$$
 
 - **$S$ (穩定係數)**：User=1.0 (不朽), Role=0.995 (近乎永恆), World=0.95 (標準衰減)。
 - **$D$ (提取密度)**：D = base + (access × 0.2) + (retrieval × 0.1)。
@@ -103,7 +79,7 @@ $$Current Score = Initial \times S^{days\_since\_access} + \ln(1 + D)$$
 - **🥇 Golden**: 永恆核心（手動標記，永不遺忘）
 - **🥈 Silver**: 活躍記憶（預設狀態）
 - **🥉 Bronze**: 存檔記憶（分數低於閾值）
-- **🍂 Dust**: 待遺忘（分數極低，將被 GC）
+- **🍂 Dust**: 待遺忘（分數極低，將由 GC 連帶 QMD 一併清除）
 
 ---
 
@@ -146,15 +122,15 @@ python main.py list
 # 投影語境
 python main.py project --topic "identity" --id "b53eb280"
 
-# 垃圾回收（含 QMD 審計）
+# 垃圾回收（自動清除實體檔案 + QMD 幽靈）
 python main.py gc --execute
 ```
 
-### 智能搜索（含逃生艙機制）
+### 智能搜索（含逃生艙防斷崖機制）
 
 ```bash
 # 統一搜索入口（推薦）
-# 自動使用神髓白名單 + QMD 限縮搜索 + 逃生艙 Fallback
+# 自動使用神髓白名單 + QMD 限縮搜索，找不到自動 Fallback 全域盲搜
 python main.py search "ClawWork 修復教訓" -n 5
 
 # 指定白名單（高信心搜索）
@@ -163,7 +139,7 @@ python main.py search "ErrCode-9942" \
   --confidence 0.8 \
   -n 3
 
-# 低信心場景（強制觸發逃生艙）
+# 低信心場景（強制觸發逃生艙，抓取隱蔽記憶）
 python main.py search "極冷門細節" \
   --confidence 0.1 \
   -n 5
@@ -178,15 +154,9 @@ python main.py qmd sync
 # 只同步有效節點
 python main.py qmd sync --filter-states GOLDEN SILVER
 
-# 數據一致性審計（修補 Edge Case 2）
+# 數據一致性審計
 python main.py qmd audit              # 乾跑模式
-python main.py qmd audit --execute    # 實際清理
-
-# 混合搜索
-python main.py qmd query "關鍵字" -n 5
-
-# 純向量搜索
-python main.py qmd vsearch "語義描述" -n 3
+python main.py qmd audit --execute    # 實際清理（同不回推）
 
 # 限縮搜索（指定白名單）
 python main.py qmd constrained-search "查詢" \
@@ -197,96 +167,24 @@ python main.py qmd constrained-search "查詢" \
 
 ---
 
-## 🚨 Edge Cases 處理指南
-
-### 場景 1：細節錯過（逃生艙機制）
-
-```python
-# 當神髓 L0/L1 沒有關鍵字時
-results, meta = bridge.smart_search_with_fallback(
-    query_text="ErrCode-9942",
-    node_whitelist=whitelist,
-    sacred_confidence=0.2,  # 低信心
-    n_results=5
-)
-# 自動觸發 Fallback，使用 QMD 全局 BM25 搜索
-```
-
-### 場景 2：數據不一致
-
-```bash
-# 定期執行審計
-python main.py qmd audit
-
-# 輸出示例：
-# 📊 Audit Report
-#    ✅ Correctly synced: 150 nodes
-#    🗑️  Orphaned in QMD: 3 nodes  ← 需要清理
-#    ❌ Missing in QMD: 5 nodes    ← 需要同步
-```
-
-### 場景 3：性能瓶頸
-
-- 白名單自動限制：超過 50 個節點只取前 50
-- QMD 超時控制：單次搜索最多 10 秒
-- 結果限制：最多返回 20 個候選結果
-
-### 場景 4：Chunk 截斷
-
-```python
-# 自動判斷是否載入完整 L2
-results, meta = bridge.smart_search_with_fallback(
-    query_text="...",
-    load_full_l2=True,      # 啟用智能載入
-    max_token_budget=2000   # Token 預算限制
-)
-# 如果 Chunk < 500 tokens 且預算允許，自動載入完整 L2
-```
-
----
-
 ## 📁 檔案結構
 
 ```
 Sacred-Essence-Viking/
-├── main.py              # CLI 入口（含自動同步 + 限縮搜索 + 逃生艙）
-├── qmd_bridge.py        # QMD 整合橋接器（Edge Cases 修補版）
-├── algorithms.py        # 核心算法（衰減公式、相似度計算）
-├── config.py            # 系統配置（閾值、權重）
-├── models.py            # 資料模型（MemoryNode、NodeState）
-├── storage.py           # 檔案儲存管理
+├── main.py              # CLI 入口
+├── qmd_bridge.py        # QMD 整合橋接器（支援 Fallback Gap 與 幽靈清除）
+├── algorithms.py        # 核心算法（衰減公式防膨脹、相似度向量長度防呆）
+├── config.py            # 系統配置（閾值、權重設定）
+├── models.py            # 資料模型（MemoryNode 帶有 is_dirty 追蹤）
+├── storage.py           # 檔案儲存管理（遞迴修正與防禦路徑穿越）
 ├── projection.py        # 語境投影引擎
-├── maintenance.py       # 維護任務（GC + QMD 審計）
+├── maintenance.py       # 維護任務（防幽靈 GC 與無延遲狀態判定）
 ├── migrate_legacy.py    # 舊版資料遷移
 ├── memo_v3.py           # 便捷的 memo 命令橋接
 ├── memo_v3.sh           # Shell 腳本橋接
 ├── requirements.txt     # Python 依賴
 ├── .gitignore           # Git 排除規則
 └── README.md            # 本文件
-```
-
----
-
-## 🔧 進階配置
-
-編輯 `config.py`：
-
-```python
-# 衰減參數
-INITIAL_IMPORTANCE = 10.0
-STABILITY_USER = 1.0
-STABILITY_ROLE = 0.995
-STABILITY_WORLD = 0.95
-
-# 閾值設定
-THRESHOLD_SILVER = 5.0
-THRESHOLD_DUST = 1.0
-SOFT_CAP_GOLDEN = 50
-
-# 逃生艙參數（qmd_bridge.py）
-FALLBACK_CONFIDENCE_THRESHOLD = 0.3  # 觸發 Fallback 的信心閾值
-FALLBACK_MAX_RESULTS = 5             # Fallback 最大結果數
-QMD_TIMEOUT = 10                     # QMD 命令超時秒數
 ```
 
 ---

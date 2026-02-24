@@ -37,6 +37,9 @@ class MemoryNode:
     L0_abstract: str = ""
     L1_overview: str = ""
     
+    # Internal Tracking (GC Performance)
+    is_dirty: bool = False
+    
     # Embedding (Cached in object or loaded on demand)
     # Stored as None to avoid memory bloat, loaded when needed
     embedding: Optional[List[float]] = field(default=None, repr=False)
@@ -45,6 +48,7 @@ class MemoryNode:
         """Update access stats."""
         self.access_count += 1
         self.last_access_date = datetime.now()
+        self.is_dirty = True
 
     def update_retrieval(self):
         """Update retrieval stats."""
@@ -53,10 +57,12 @@ class MemoryNode:
         # Strategy says "Effective interaction" updates days. 
         # Usually retrieval implies we saw it, so it refreshes the memory.
         self.last_access_date = datetime.now()
+        self.is_dirty = True
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
         data = asdict(self)
+        data.pop('is_dirty', None)  # Don't serialize transient tracking flag
         data['creation_date'] = self.creation_date.isoformat()
         data['last_access_date'] = self.last_access_date.isoformat()
         data['state'] = self.state.value
@@ -65,6 +71,7 @@ class MemoryNode:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'MemoryNode':
         """Deserialize from dictionary."""
+        data.pop('is_dirty', None)
         # Handle Date parsing
         data['creation_date'] = datetime.fromisoformat(data['creation_date'])
         data['last_access_date'] = datetime.fromisoformat(data['last_access_date'])
