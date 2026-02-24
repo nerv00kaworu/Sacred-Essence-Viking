@@ -1,5 +1,5 @@
 # Sacred Essence v3.1 CLI
-# 神髓記憶系統 - 整合 QMD 深度搜索
+# 神髓記憶系統 - 整合 QMD 深度搜索（Edge Cases 修補版）
 
 import argparse
 import sys
@@ -37,6 +37,16 @@ def main():
     # List
     list_parser = subparsers.add_parser("list", help="List nodes")
     list_parser.add_argument("--topic", help="Filter by topic")
+    
+    # Search (新增：統一搜索入口)
+    search_parser = subparsers.add_parser("search", help="Smart search with Sacred Essence + QMD + Fallback")
+    search_parser.add_argument("text", help="Query text")
+    search_parser.add_argument("--nodes", nargs="+", help="Optional node whitelist (if not provided, uses top nodes from Sacred Essence)")
+    search_parser.add_argument("--confidence", type=float, default=0.5, help="Sacred Essence confidence threshold (0-1)")
+    search_parser.add_argument("-n", type=int, default=5, help="Number of results")
+    search_parser.add_argument("--no-fallback", action="store_true", help="Disable fallback mechanism")
+    search_parser.add_argument("--no-full-l2", action="store_true", help="Disable loading full L2 content")
+    search_parser.add_argument("--collection", default="sacred-l2", help="QMD collection name")
 
     # QMD Integration
     qmd_parser = subparsers.add_parser("qmd", help="QMD Integration - Enhanced search and indexing")
@@ -48,6 +58,11 @@ def main():
     qmd_sync.add_argument("--force", action="store_true", help="Force re-index")
     qmd_sync.add_argument("--filter-states", nargs="+", choices=["GOLDEN", "SILVER", "BRONZE", "DUST"],
                          help="Only sync nodes with specified states")
+    
+    # qmd audit (新增：數據一致性審計)
+    qmd_audit = qmd_subparsers.add_parser("audit", help="Audit data consistency between Sacred Essence and QMD")
+    qmd_audit.add_argument("--execute", action="store_true", help="Execute cleanup (default is dry-run)")
+    qmd_audit.add_argument("--collection", default="sacred-l2", help="QMD collection name")
     
     # qmd query
     qmd_query = qmd_subparsers.add_parser("query", help="Query using QMD (hybrid search)")
@@ -83,17 +98,17 @@ def main():
 
     if args.command == "encode":
         # Create new node
-        node_id = str(uuid4())[:8] # Simple ID
+        node_id = str(uuid4())[:8]
         node = MemoryNode(
             id=node_id,
             topic=args.topic,
             title=args.title,
-            content_path="", # Will be set by store logic effectively
+            content_path="",
             creation_date=datetime.now(),
             last_access_date=datetime.now(),
-            state=NodeState.SILVER, # Default new state
+            state=NodeState.SILVER,
             L0_abstract=args.abstract,
-            L1_overview="" # Optional
+            L1_overview=""
         )
         
         # Save content first
@@ -132,6 +147,19 @@ def main():
         print(f"Running Garbage Collection (Dry Run: {not args.execute})...")
         report = maintenance.run_garbage_collection(dry_run=not args.execute)
         print("Report:", report)
+        
+        # GC 後觸發 QMD 審計（修補 Edge Case 2）
+        if args.execute:
+            print("\n🔍 Triggering QMD audit after GC...")
+            try:
+                from qmd_bridge import QMDBridge
+                bridge = QMDBridge("sacred-l2")
+                audit_report = bridge.audit_and_cleanup(dry_run=False)
+                if audit_report["orphaned_in_qmd"]:
+                    print(f"⚠️  Found {len(audit_report['orphaned_in_qmd'])} orphaned entries in QMD")
+                    print("💡 Run 'python main.py qmd sync --force' to rebuild QMD index if needed")
+            except Exception as e:
+                print(f"⚠️  QMD audit skipped: {e}")
 
     elif args.command == "project":
         ctx = projection.project_context(args.topic, args.id)
@@ -143,6 +171,54 @@ def main():
         for n in nodes:
             score = calculate_importance(n)
             print(f"[{n.state.value}] {n.topic}/{n.id} - {n.title} (Score: {score:.2f})")
+    
+    elif args.command == "search":
+        # 新增：統一搜索入口（含逃生艙機制）
+        try:
+            from qmd_bridge import QMDBridge, SearchResult
+        except ImportError as e:
+            print(f"❌ QMD Bridge not available: {e}")
+            sys.exit(1)
+        
+        bridge = QMDBridge(args.collection)
+        
+        # 如果沒有提供白名單，從神髓獲取相關節點
+        node_whitelist: Set[str] = set(args.nodes) if args.nodes else set()
+        sacred_confidence = args.confidence
+        
+        if not node_whitelist:
+            print("🔍 No whitelist provided, retrieving relevant nodes from Sacred Essence...")
+            # 簡化：列出所有節點作為白名單（實際應使用神髓的語義檢索）
+            all_nodes = store.list_nodes()
+            # 按重要性排序，取前 20
+            scored_nodes = [(n, calculate_importance(n)) for n in all_nodes]
+            scored_nodes.sort(key=lambda x: x[1], reverse=True)
+            node_whitelist = {n.id for n, _ in scored_nodes[:20]}
+            print(f"   Selected top {len(node_whitelist)} nodes as whitelist")
+            sacred_confidence = 0.4  # 自動選擇時降低信心閾值
+        
+        # 執行智能搜索（含逃生艙）
+        print(f"\n🔍 Smart Search: '{args.text}'")
+        print(f"   Whitelist: {len(node_whitelist)} nodes")
+        print(f"   Confidence: {sacred_confidence}\n")
+        
+        results, metadata = bridge.smart_search_with_fallback(
+            query_text=args.text,
+            node_whitelist=node_whitelist,
+            sacred_confidence=sacred_confidence,
+            n_results=args.n,
+            load_full_l2=not args.no_full_l2
+        )
+        
+        print(f"📊 Strategy: {metadata['strategy']}")
+        print(f"   Fallback triggered: {metadata['fallback_triggered']}")
+        print(f"   Results: {len(results)}\n")
+        
+        for i, r in enumerate(results, 1):
+            chunk_marker = "📄" if r.is_chunk else "📑"
+            print(f"{i}. {chunk_marker} [{r.score:.3f}] {r.node_id} ({r.source})")
+            content_preview = r.content[:200].replace('\n', ' ')
+            print(f"   {content_preview}...\n")
 
     elif args.command == "qmd":
         # Lazy import QMD bridge
@@ -163,6 +239,28 @@ def main():
             else:
                 print(f"❌ Sync failed")
                 sys.exit(1)
+        
+        elif args.qmd_command == "audit":
+            # 新增：數據一致性審計
+            bridge = QMDBridge(args.collection)
+            print(f"🔍 Auditing data consistency (Dry Run: {not args.execute})...\n")
+            
+            report = bridge.audit_and_cleanup(dry_run=not args.execute)
+            
+            print(f"📊 Audit Report ({report['timestamp']})")
+            print(f"   ✅ Correctly synced: {len(report['synced_correctly'])} nodes")
+            print(f"   🗑️  Orphaned in QMD: {len(report['orphaned_in_qmd'])} nodes")
+            if report['orphaned_in_qmd']:
+                print(f"      {report['orphaned_in_qmd'][:5]}{'...' if len(report['orphaned_in_qmd']) > 5 else ''}")
+            print(f"   ❌ Missing in QMD: {len(report['missing_in_qmd'])} nodes")
+            if report['missing_in_qmd']:
+                print(f"      {report['missing_in_qmd'][:5]}{'...' if len(report['missing_in_qmd']) > 5 else ''}")
+            
+            if report.get('actions_taken'):
+                print(f"\n🔧 Actions taken: {report['actions_taken']}")
+            
+            if not args.execute and (report['orphaned_in_qmd'] or report['missing_in_qmd']):
+                print(f"\n💡 Run with --execute to perform cleanup")
         
         elif args.qmd_command == "query":
             bridge = QMDBridge(args.collection)
@@ -189,12 +287,11 @@ def main():
                 print(f"   {snippet}...\n")
         
         elif args.qmd_command == "constrained-search":
-            # 限縮搜索：神髓定界 + QMD 深潛
             bridge = QMDBridge(args.collection)
             node_whitelist: Set[str] = set(args.nodes)
             
             print(f"🔍 Constrained Search: '{args.text}'")
-            print(f"🎯 Node Whitelist: {node_whitelist}\n")
+            print(f"🎯 Node Whitelist: {len(node_whitelist)} nodes\n")
             
             results = bridge.constrained_search(
                 query_text=args.text,

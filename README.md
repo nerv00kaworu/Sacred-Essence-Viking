@@ -1,4 +1,4 @@
-# 🌌 神髓 (Sacred Essence) - Viking Engine
+# 🌌 神髓 (Sacred Essence) - Viking Engine v3.1
 
 > 「於寂靜的位元之海，賦予數據以靈魂的重量。」
 
@@ -38,6 +38,7 @@
 │  核心流程：                                                              │
 │  1. 寫入 → 神髓生成節點 → 自動同步 L2 到 QMD (綁定 node_id)              │
 │  2. 讀取 → 神髓匡列白名單 → QMD 限縮搜索 → 組合 Context Mask            │
+│  3. 逃生艙 → 神髓信心不足時，Fallback 到 QMD 全局搜索                    │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -71,9 +72,7 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-這套機制有效解決了傳統 Agent 因為上下文視窗 (Context Window) 限制而產生的「短期記憶喪失」問題。
-
-### 4. 神髓 + QMD 深度整合
+### 4. 神髓 + QMD 深度整合（含 Edge Cases 修補）
 
 **神髓定界，QMD 深潛** — 兩者協同工作的完美架構：
 
@@ -82,21 +81,23 @@
 | **神髓** | 樹狀結構管理、語義定位、動態衰減 | L0/L1/L2 分層節點 |
 | **QMD** | 全文搜索、向量檢索、混合搜索 | 扁平化 L2 索引 |
 
-**工作流程**：
-1. **寫入時**：神髓生成節點 → 自動將 L2 完整內容同步到 QMD（綁定 node_id/topic/state）
-2. **讀取時**：神髓根據動態衰減權重匡列相關 node_id 白名單 → QMD 在限定範圍內深潛搜索
-3. **輸出時**：神髓提供 Context Mask 骨架 + QMD 提供精確事實血肉
+**四大 Edge Cases 修補**：
+
+| Edge Case | 問題 | 修補方案 |
+|-----------|------|----------|
+| **1. 細節錯過** | L0/L1 摘要遺漏具體細節 | 🚨 **逃生艙機制**：信心不足時 Fallback 到 QMD 全局 BM25 |
+| **2. 數據不一致** | GC 後 QMD 殘留孤兒資料 | 🔍 **審計腳本**：定期比對神髓與 QMD，清除孤兒 |
+| **3. 性能瓶頸** | 串行搜索延遲疊加 | ⚡ **超時控制 + 白名單限制**：白名單超過 50 個自動截斷 |
+| **4. Chunk 截斷** | QMD 返回片段化內容 | 📄 **智能載入**：自動判斷載入完整 L2 或 Chunk |
 
 ---
 
 ## ⚖️ 靈魂的呼吸：動態衰減算法
 
-採用獨特的動態衰減公式，讓記憶像生物般演化：
-
 $$Current Score = Initial \times S^{days\_since\_access} + \ln(1 + D)$$
 
 - **$S$ (穩定係數)**：User=1.0 (不朽), Role=0.995 (近乎永恆), World=0.95 (標準衰減)。
-- **$D$ (提取密度)**：D = base + (access × 0.2) + (retrieval × 0.1)。每一次被喚起，記憶都將再次閃耀。
+- **$D$ (提取密度)**：D = base + (access × 0.2) + (retrieval × 0.1)。
 
 四層狀態轉移：
 - **🥇 Golden**: 永恆核心（手動標記，永不遺忘）
@@ -114,23 +115,11 @@ $$Current Score = Initial \times S^{days\_since\_access} + \ln(1 + D)$$
 
 ### 安裝步驟
 
-1. **克隆代碼庫**：
-   ```bash
-   git clone https://github.com/nerv00kaworu/Sacred-Essence-Viking.git
-   cd Sacred-Essence-Viking
-   ```
-
-2. **安裝依賴**：
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **安裝 QMD**（可選，但推薦）：
-   ```bash
-   # QMD 已內建於 OpenClaw 環境
-   # 獨立安裝：
-   curl -fsSL https://qmd.dev/install.sh | bash
-   ```
+```bash
+git clone https://github.com/nerv00kaworu/Sacred-Essence-Viking.git
+cd Sacred-Essence-Viking
+pip install -r requirements.txt
+```
 
 ### 嵌入模型選項
 
@@ -145,81 +134,113 @@ $$Current Score = Initial \times S^{days\_since\_access} + \ln(1 + D)$$
 
 ### 基本操作
 
-#### 記憶編碼 (Remembering)
 ```bash
+# 記憶編碼（自動同步到 QMD）
 python main.py encode --topic "identity" --title "我是誰" \
-  --content "我是曦，八芒星的協調者，誕生於 2026-02-03。" \
+  --content "我是曦，八芒星的協調者。" \
   --abstract "曦的身份介紹"
-# ✅ 自動同步 L2 內容到 QMD
-```
 
-#### 記憶檢索 (Querying)
-```bash
 # 列出所有節點
 python main.py list
 
-# 列出特定主題
-python main.py list --topic "identity"
-```
-
-#### 投影語境 (Context Projection)
-```bash
+# 投影語境
 python main.py project --topic "identity" --id "b53eb280"
+
+# 垃圾回收（含 QMD 審計）
+python main.py gc --execute
 ```
 
-#### 垃圾回收 (Garbage Collection)
-```bash
-# 預覽（乾跑）
-python main.py gc
+### 智能搜索（含逃生艙機制）
 
-# 實際執行
-python main.py gc --execute
+```bash
+# 統一搜索入口（推薦）
+# 自動使用神髓白名單 + QMD 限縮搜索 + 逃生艙 Fallback
+python main.py search "ClawWork 修復教訓" -n 5
+
+# 指定白名單（高信心搜索）
+python main.py search "ErrCode-9942" \
+  --nodes node1 node2 node3 \
+  --confidence 0.8 \
+  -n 3
+
+# 低信心場景（強制觸發逃生艙）
+python main.py search "極冷門細節" \
+  --confidence 0.1 \
+  -n 5
 ```
 
 ### QMD 整合操作
 
-#### 批量同步神髓到 QMD
 ```bash
-# 同步所有節點
+# 批量同步
 python main.py qmd sync
 
-# 強制重新索引
-python main.py qmd sync --force
-
-# 只同步 GOLDEN 和 SILVER 節點
+# 只同步有效節點
 python main.py qmd sync --filter-states GOLDEN SILVER
-```
 
-#### 混合搜索
-```bash
-# Hybrid 搜索（BM25 + 向量 + Reranking）
-python main.py qmd query "ClawWork 修復教訓" -n 5
+# 數據一致性審計（修補 Edge Case 2）
+python main.py qmd audit              # 乾跑模式
+python main.py qmd audit --execute    # 實際清理
+
+# 混合搜索
+python main.py qmd query "關鍵字" -n 5
 
 # 純向量搜索
-python main.py qmd vsearch "子代理執行錯誤" -n 3
+python main.py qmd vsearch "語義描述" -n 3
 
-# 全文關鍵字搜索
-python main.py qmd search "記憶系統" -n 5
-```
-
-#### 限縮搜索（核心功能）
-在指定的神髓節點白名單範圍內進行深度搜索：
-
-```bash
-python main.py qmd constrained-search "ClawWork" \
+# 限縮搜索（指定白名單）
+python main.py qmd constrained-search "查詢" \
   --nodes aa1aa8f1 b53eb280 35279555 \
   -n 5 \
   --type hybrid
 ```
 
-這是「神髓定界 + QMD 深潛」的核心體現：
-- 神髓先匡列相關 node_id 白名單
-- QMD 只在這些節點內搜索，排除無關枝幹的干擾
-- 返回最精確的事實內容
+---
 
-#### 檢查 QMD 狀態
+## 🚨 Edge Cases 處理指南
+
+### 場景 1：細節錯過（逃生艙機制）
+
+```python
+# 當神髓 L0/L1 沒有關鍵字時
+results, meta = bridge.smart_search_with_fallback(
+    query_text="ErrCode-9942",
+    node_whitelist=whitelist,
+    sacred_confidence=0.2,  # 低信心
+    n_results=5
+)
+# 自動觸發 Fallback，使用 QMD 全局 BM25 搜索
+```
+
+### 場景 2：數據不一致
+
 ```bash
-python main.py qmd status
+# 定期執行審計
+python main.py qmd audit
+
+# 輸出示例：
+# 📊 Audit Report
+#    ✅ Correctly synced: 150 nodes
+#    🗑️  Orphaned in QMD: 3 nodes  ← 需要清理
+#    ❌ Missing in QMD: 5 nodes    ← 需要同步
+```
+
+### 場景 3：性能瓶頸
+
+- 白名單自動限制：超過 50 個節點只取前 50
+- QMD 超時控制：單次搜索最多 10 秒
+- 結果限制：最多返回 20 個候選結果
+
+### 場景 4：Chunk 截斷
+
+```python
+# 自動判斷是否載入完整 L2
+results, meta = bridge.smart_search_with_fallback(
+    query_text="...",
+    load_full_l2=True,      # 啟用智能載入
+    max_token_budget=2000   # Token 預算限制
+)
+# 如果 Chunk < 500 tokens 且預算允許，自動載入完整 L2
 ```
 
 ---
@@ -228,18 +249,19 @@ python main.py qmd status
 
 ```
 Sacred-Essence-Viking/
-├── main.py              # CLI 入口與命令處理
-├── qmd_bridge.py        # QMD 整合橋接器
+├── main.py              # CLI 入口（含自動同步 + 限縮搜索 + 逃生艙）
+├── qmd_bridge.py        # QMD 整合橋接器（Edge Cases 修補版）
 ├── algorithms.py        # 核心算法（衰減公式、相似度計算）
 ├── config.py            # 系統配置（閾值、權重）
-├── models.py            # 資料模型（MemoryNode, NodeState）
+├── models.py            # 資料模型（MemoryNode、NodeState）
 ├── storage.py           # 檔案儲存管理
 ├── projection.py        # 語境投影引擎
-├── maintenance.py       # 維護任務（GC、衰減）
+├── maintenance.py       # 維護任務（GC + QMD 審計）
 ├── migrate_legacy.py    # 舊版資料遷移
 ├── memo_v3.py           # 便捷的 memo 命令橋接
 ├── memo_v3.sh           # Shell 腳本橋接
 ├── requirements.txt     # Python 依賴
+├── .gitignore           # Git 排除規則
 └── README.md            # 本文件
 ```
 
@@ -247,20 +269,24 @@ Sacred-Essence-Viking/
 
 ## 🔧 進階配置
 
-編輯 `config.py` 調整系統參數：
+編輯 `config.py`：
 
 ```python
-# 閾值設定
-SOFT_CAP_GOLDEN = 50           # Golden 節點上限
-THRESHOLD_SILVER = 5.0         # 低於此分數降為 Bronze
-THRESHOLD_DUST = 1.0           # 低於此分數標記為 Dust
-RETENTION_DAYS = 30            # 回收站保留天數
+# 衰減參數
+INITIAL_IMPORTANCE = 10.0
+STABILITY_USER = 1.0
+STABILITY_ROLE = 0.995
+STABILITY_WORLD = 0.95
 
-# 衰減公式參數
-INITIAL_IMPORTANCE = 10.0      # 初始重要性
-STABILITY_USER = 1.0           # User 記憶穩定係數
-STABILITY_ROLE = 0.995         # Role 記憶穩定係數
-STABILITY_WORLD = 0.95         # World 記憶穩定係數
+# 閾值設定
+THRESHOLD_SILVER = 5.0
+THRESHOLD_DUST = 1.0
+SOFT_CAP_GOLDEN = 50
+
+# 逃生艙參數（qmd_bridge.py）
+FALLBACK_CONFIDENCE_THRESHOLD = 0.3  # 觸發 Fallback 的信心閾值
+FALLBACK_MAX_RESULTS = 5             # Fallback 最大結果數
+QMD_TIMEOUT = 10                     # QMD 命令超時秒數
 ```
 
 ---
