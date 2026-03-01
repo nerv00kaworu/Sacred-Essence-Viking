@@ -29,8 +29,8 @@ def calculate_density(node: 'MemoryNode') -> float:
 
 def calculate_importance(node: 'MemoryNode', current_date: datetime = None) -> float:
     """
-    Calculate Current Importance Score.
-    Current = Initial * S^days + ln(1 + D)
+    Calculate Current Importance Score (V3 Math).
+    Current = Initial * S^days + min(5.0, ln(1 + D))
     """
     if current_date is None:
         current_date = datetime.now()
@@ -39,16 +39,11 @@ def calculate_importance(node: 'MemoryNode', current_date: datetime = None) -> f
     age_days = (current_date - node.creation_date).days
     if age_days <= GRACE_PERIOD_DAYS:
         # In grace period, return high score (Initial + Density bonus)
-        # to ensure it's not GC'd immediately.
-        # Returning just INITIAL_IMPORTANCE might be enough, 
-        # but adding density allows it to grow even in grace period.
         d = calculate_density(node)
-        return INITIAL_IMPORTANCE + math.log(1 + d)
+        growth = min(5.0, math.log(1 + d))
+        return INITIAL_IMPORTANCE + growth
 
     # 2. Calculate Decay Days (Distance from LAST INTERACTION)
-    # The formula says `S^days`. If we use age, it decays too fast.
-    # If we use `days since last access`, it resets on access.
-    # Strategy: "days: 距離上次有效互動的天數"
     days_unused = (current_date - node.last_access_date).days
     if days_unused < 0: days_unused = 0
     
@@ -57,11 +52,16 @@ def calculate_importance(node: 'MemoryNode', current_date: datetime = None) -> f
     density = calculate_density(node)
     
     # 4. Formula
-    # Current = Initial * (S ^ days_unused) + ln(1 + D)
+    # Current = Initial * (S ^ days_unused) + min(5.0, ln(1 + D))
     decay_term = INITIAL_IMPORTANCE * (math.pow(s_factor, days_unused))
-    growth_term = math.log(1 + density)
+    
+    # Zero-Inflation Math: Cap the density growth at +5.0 to ensure 
+    # highly accessed nodes can still eventually decay below the THRESHOLD_SILVER (5.0) 
+    # if unused for a very long time.
+    growth_term = min(5.0, math.log(1 + density))
     
     current_score = decay_term + growth_term
+    
     return current_score
 
 def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:

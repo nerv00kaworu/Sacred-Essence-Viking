@@ -11,6 +11,7 @@ class NodeState(str, Enum):
     SILVER = "SILVER"
     BRONZE = "BRONZE"
     DUST = "DUST"
+    SOIL = "SOIL"  # Compressed/Archived state
     
     # Helper for serialization
     def __str__(self):
@@ -21,13 +22,15 @@ class MemoryNode:
     id: str  # Unique ID (e.g. UUID or Sanitized Title)
     topic: str
     title: str
-    content_path: str # Path to L2 raw content file
     
-    # Metadata
+    # Metadata (required)
     creation_date: datetime
     last_access_date: datetime
     
-    # Logic Stats
+    # Content Path (optional - for ref nodes like notebooklm)
+    content_path: str = ""
+    
+    # Logic Stats (optional with defaults)
     access_count: int = 0
     retrieval_count: int = 0
     stability_factor: float = 0.95
@@ -36,6 +39,12 @@ class MemoryNode:
     # Content Cache (L0/L1 are stored in JSON metadata usually, or small files)
     L0_abstract: str = ""
     L1_overview: str = ""
+    
+    # Type field for special nodes (e.g., notebooklm, research, etc.)
+    type: Optional[str] = None
+    
+    # NotebookLM metadata (for notebooklm-ref type nodes)
+    notebooklm: Optional[Dict[str, Any]] = None
     
     # Embedding (Cached in object or loaded on demand)
     # Stored as None to avoid memory bloat, loaded when needed

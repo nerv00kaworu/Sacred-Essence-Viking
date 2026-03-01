@@ -1,10 +1,12 @@
 # Sacred Essence v3.1 Configuration
 
 import os
+from pathlib import Path
 
 # Base Directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MEMORY_DIR = os.path.join(BASE_DIR, "memory")
+# 正確的記憶目錄在 workspace/memory/octagram/engine/
+MEMORY_DIR = "/home/nerv0/.openclaw/workspace/memory/octagram/engine/memory"
 TRASH_DIR = os.path.join(BASE_DIR, ".trash")
 
 # Ensure directories exist (Implementation detail, but config is good place for definitions)
@@ -17,7 +19,7 @@ TRASH_DIR = os.path.join(BASE_DIR, ".trash")
 # Thresholds
 SOFT_CAP_GOLDEN = 50
 THRESHOLD_SILVER = 5.0   # Score < 5.0 -> Prune to Bronze (if not Golden)
-THRESHOLD_DUST = 1.0     # Score < 1.0 -> Mark as Dust
+THRESHOLD_DUST = 1.0     # Score < 1.0 -> Mark as Dust (or Soil extraction)
 RETENTION_DAYS = 30      # Days to keep in Trash
 MIN_KEEP_NODES = 20      # Safety Net: Minimum active nodes to preserve
 GRACE_PERIOD_DAYS = 3    # Days before decay starts for new nodes

@@ -45,7 +45,7 @@ class QMDBridge:
     # 逃生艙閾值設定
     FALLBACK_CONFIDENCE_THRESHOLD = 0.3  # 神髓信心分數低於此值觸發 Fallback
     FALLBACK_MAX_RESULTS = 5  # Fallback 搜索最大結果數
-    QMD_TIMEOUT = 10  # QMD 命令超時秒數
+    QMD_TIMEOUT = 300  # QMD 命令超時秒數（加長以避免在 CPU 上大量 embedding 時卡死）
     
     def __init__(self, collection_name: str = "sacred-l2", memory_dir: Optional[str] = None):
         self.collection_name = collection_name
@@ -59,12 +59,18 @@ class QMDBridge:
     def _run_qmd(self, args: List[str], timeout: int = None) -> Tuple[bool, str]:
         """執行 QMD 命令並返回結果（支援超時）"""
         timeout = timeout or self.QMD_TIMEOUT
+        
+        # 強制關閉 GPU，防止 node-llama-cpp 在 WSL 找不到 CUDA 時瘋狂嘗試從源碼編譯導致卡死
+        env = os.environ.copy()
+        env["NODE_LLAMA_CPP_GPU"] = "false"
+        
         try:
             result = subprocess.run(
                 [self.qmd_cmd] + args,
                 capture_output=True,
                 text=True,
-                timeout=timeout
+                timeout=timeout,
+                env=env
             )
             if result.returncode == 0:
                 return True, result.stdout
@@ -560,6 +566,32 @@ class QMDBridge:
 # 便捷函數
 def create_bridge(collection_name: str = "sacred-l2", memory_dir: Optional[str] = None) -> QMDBridge:
     return QMDBridge(collection_name, memory_dir)
+
+
+def sync_sacred_essence_to_qmd(
+    collection_name: str = "sacred-l2",
+    memory_dir: Optional[str] = None,
+    filter_states: Optional[List[str]] = None,
+    force: bool = False
+) -> bool:
+    """
+    便捷函數：同步神髓數據到 QMD
+    
+    Args:
+        collection_name: QMD 集合名稱
+        memory_dir: 神髓記憶目錄路徑
+        filter_states: 只同步指定狀態的節點 (e.g., ["GOLDEN", "SILVER"])
+        force: 強制重新建立集合
+    
+    Returns:
+        同步是否成功
+    """
+    bridge = QMDBridge(collection_name, memory_dir)
+    return bridge.sync_from_sacred_essence(
+        memory_dir=memory_dir,
+        force=force,
+        filter_states=filter_states
+    )
 
 
 if __name__ == "__main__":

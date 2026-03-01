@@ -11,7 +11,8 @@ from config import (
     THRESHOLD_DUST,
     MIN_KEEP_NODES,
     TRASH_DIR,
-    RETENTION_DAYS
+    RETENTION_DAYS,
+    MEMORY_DIR
 )
 from models import MemoryNode, NodeState
 from storage import MemoryStore
@@ -44,7 +45,9 @@ class MaintenanceManager:
             score = calculate_importance(node, current_time)
             
             if node.state == NodeState.GOLDEN:
-                pass 
+                if score < THRESHOLD_SILVER:
+                    node.state = NodeState.SILVER
+                    report["downgraded_silver"] += 1
             elif node.state == NodeState.SILVER:
                 if score < THRESHOLD_SILVER:
                     if score < THRESHOLD_DUST:
@@ -77,9 +80,12 @@ class MaintenanceManager:
             print(f"WARNING: Safety Net Triggered! Active nodes ({active_count}) < Min ({MIN_KEEP_NODES}). Aborting GC.")
             return report
 
-        # Move Dust to Trash
+        # Process Dust (Soil Extraction -> Trash)
         if not dry_run:
             for node in nodes_by_state[NodeState.DUST]:
+                # Phase 3 feature: Extract essence to SOIL
+                self._extract_soil(node)
+                node.state = NodeState.SOIL
                 self.store.move_to_trash(node)
                 report["trashed"] += 1
             
@@ -128,6 +134,43 @@ class MaintenanceManager:
                 # Malformed name or error, skip
                 continue
         return cleaned
+
+    def _extract_soil(self, node: 'MemoryNode'):
+        """Extract dying memory essence into a global SOIL.md file."""
+        import json
+        
+        # Read the raw content if possible
+        content = ""
+        topic_path = os.path.join(MEMORY_DIR, "topics", node.topic, node.id, "content.md")
+        try:
+            if os.path.exists(topic_path):
+                with open(topic_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+        except:
+            if node.L1_overview:
+                content = node.L1_overview
+        
+        # We will use the L1 overview or extract the first few lines as a fallback summary
+        summary = node.L1_overview
+        if not summary and content:
+            lines = [line.strip() for line in content.split('\\n') if line.strip() and not line.startswith('[NODE_ID:')]
+            summary = ' '.join(lines[:3]) + ('...' if len(lines) > 3 else '')
+            
+        if not summary:
+            summary = "No content available."
+
+        # Append to SOIL
+        soil_path = os.path.join(MEMORY_DIR, "SOIL.md")
+        timestamp = datetime.now().strftime("%Y-%m-%d")
+        
+        try:
+            with open(soil_path, 'a', encoding='utf-8') as sf:
+                sf.write(f"\\n### [{timestamp}] {node.title}\\n")
+                sf.write(f"**Topic**: {node.topic} | **Original ID**: {node.id}\\n")
+                sf.write(f"{summary}\\n")
+                sf.write("---\\n")
+        except Exception as e:
+            print(f"WARNING: Failed to extract SOIL for {node.id}: {e}")
 
     def count_active_nodes(self) -> int:
         all_nodes = self.store.list_nodes()
