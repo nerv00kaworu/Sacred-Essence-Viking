@@ -186,7 +186,8 @@ crontab -e
 | 項目 | 規格 |
 |-----|------|
 | 嵌入模型 | google/embeddinggemma-300m |
-| 向量維度 | 384 / 300M |
+| 向量維度 | 384 維 | Gemma 300M 模型輸出 |
+| 模型大小 | 300M 參數 | ~150MB (GGUF Q8) |
 | 搜索後端 | QMD (本地) |
 | 檔案格式 | Markdown |
 | 並發安全 | fcntl 文件鎖 |
