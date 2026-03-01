@@ -11,8 +11,7 @@ from config import (
     THRESHOLD_DUST,
     MIN_KEEP_NODES,
     TRASH_DIR,
-    RETENTION_DAYS,
-    MEMORY_DIR
+    RETENTION_DAYS
 )
 from models import MemoryNode, NodeState
 from storage import MemoryStore
@@ -45,9 +44,7 @@ class MaintenanceManager:
             score = calculate_importance(node, current_time)
             
             if node.state == NodeState.GOLDEN:
-                if score < THRESHOLD_SILVER:
-                    node.state = NodeState.SILVER
-                    report["downgraded_silver"] += 1
+                pass 
             elif node.state == NodeState.SILVER:
                 if score < THRESHOLD_SILVER:
                     if score < THRESHOLD_DUST:
@@ -71,8 +68,21 @@ class MaintenanceManager:
             excess = len(golden_nodes) - SOFT_CAP_GOLDEN
             for i in range(excess):
                 node = golden_nodes[i]
-                node.state = NodeState.SILVER
-                report["downgraded_silver"] += 1
+                
+                # Evaluate score immediately to prevent delayed state transition
+                score = calculate_importance(node, current_time)
+                if score < THRESHOLD_DUST:
+                    node.state = NodeState.DUST
+                    report["marked_dust"] += 1
+                elif score < THRESHOLD_SILVER:
+                    node.state = NodeState.BRONZE
+                    report["downgraded_silver"] += 1
+                else:
+                    node.state = NodeState.SILVER
+                    report["downgraded_silver"] += 1
+                    
+                # Add to corresponding state list so it will be trashed if DUST
+                nodes_by_state[node.state].append(node)
 
         # Safety Net Check
         active_count = len(all_nodes) - len(nodes_by_state[NodeState.DUST])
@@ -80,18 +90,38 @@ class MaintenanceManager:
             print(f"WARNING: Safety Net Triggered! Active nodes ({active_count}) < Min ({MIN_KEEP_NODES}). Aborting GC.")
             return report
 
-        # Process Dust (Soil Extraction -> Trash)
+        # Move Dust to Trash
         if not dry_run:
+            # 引入 QMD Bridge 以執行刪除
+            bridge_instance = None
+            try:
+                from qmd_bridge import QMDBridge
+                bridge_instance = QMDBridge("sacred-l2")
+            except Exception as e:
+                print(f"⚠️  Could not init QMD Bridge for GC deletion: {e}")
+                
             for node in nodes_by_state[NodeState.DUST]:
-                # Phase 3 feature: Extract essence to SOIL
-                self._extract_soil(node)
-                node.state = NodeState.SOIL
+                # Exclude nodes that were inherently DUST and trashed before to prevent duplicate trash moves
+                # We assume store.move_to_trash handles if it doesn't exist anymore, but wait updated_nodes logic
                 self.store.move_to_trash(node)
                 report["trashed"] += 1
+                
+                # 防禦『資料幽靈』：同步從 QMD 中刪除
+                if bridge_instance:
+                    bridge_instance.delete_node(node.id)
             
             for node in updated_nodes:
                 if node.state != NodeState.DUST:
-                    self.store.save_node(node)
+                    # Optimize File I/O: Only save if changed state or interacted (is_dirty)
+                    is_modified = getattr(node, 'is_dirty', False)
+                    # We can't easily check state change here without tracking original.
+                    # As a workaround, just save if is_dirty flag is True.
+                    # Let's save unconditionally if it's dirty, OR if its score indicates a recent change.
+                    # Better solution: Always save nodes whose state is not DUST and is dirty.
+                    if getattr(node, 'is_dirty', True):
+                        self.store.save_node(node)
+                        if hasattr(node, 'is_dirty'):
+                            node.is_dirty = False
 
             report["cleaned_trash"] = self._clean_trash()
             
@@ -134,43 +164,6 @@ class MaintenanceManager:
                 # Malformed name or error, skip
                 continue
         return cleaned
-
-    def _extract_soil(self, node: 'MemoryNode'):
-        """Extract dying memory essence into a global SOIL.md file."""
-        import json
-        
-        # Read the raw content if possible
-        content = ""
-        topic_path = os.path.join(MEMORY_DIR, "topics", node.topic, node.id, "content.md")
-        try:
-            if os.path.exists(topic_path):
-                with open(topic_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-        except:
-            if node.L1_overview:
-                content = node.L1_overview
-        
-        # We will use the L1 overview or extract the first few lines as a fallback summary
-        summary = node.L1_overview
-        if not summary and content:
-            lines = [line.strip() for line in content.split('\\n') if line.strip() and not line.startswith('[NODE_ID:')]
-            summary = ' '.join(lines[:3]) + ('...' if len(lines) > 3 else '')
-            
-        if not summary:
-            summary = "No content available."
-
-        # Append to SOIL
-        soil_path = os.path.join(MEMORY_DIR, "SOIL.md")
-        timestamp = datetime.now().strftime("%Y-%m-%d")
-        
-        try:
-            with open(soil_path, 'a', encoding='utf-8') as sf:
-                sf.write(f"\\n### [{timestamp}] {node.title}\\n")
-                sf.write(f"**Topic**: {node.topic} | **Original ID**: {node.id}\\n")
-                sf.write(f"{summary}\\n")
-                sf.write("---\\n")
-        except Exception as e:
-            print(f"WARNING: Failed to extract SOIL for {node.id}: {e}")
 
     def count_active_nodes(self) -> int:
         all_nodes = self.store.list_nodes()

@@ -169,12 +169,13 @@ class QMDBridge:
                 constrained_results, source="constrained", load_full_l2=load_full_l2
             )
         
-        # Step 2: 逃生艙機制 - 如果結果不夠或信心不足
-        if len(results) < n_results or sacred_confidence < self.FALLBACK_CONFIDENCE_THRESHOLD:
+        # Step 2: 逃生艙機制 - 斷崖式過濾修復 (The Fallback Gap)
+        # 如果神髓完全沒有撈到白名單（門沒開），或者信心不足，強制進行全局盲搜
+        if not node_whitelist or sacred_confidence < self.FALLBACK_CONFIDENCE_THRESHOLD:
             metadata["fallback_triggered"] = True
             metadata["strategy"] = "fallback_hybrid"
             
-            print(f"🚨 觸發逃生艙機制 (信心: {sacred_confidence:.2f})")
+            print(f"🚨 觸發逃生艙機制 (神髓信心: {sacred_confidence:.2f}, 白名單: {len(node_whitelist)})")
             
             # Fallback 1: 全局 BM25 關鍵字搜索
             fallback_results = self.keyword_search(query_text, n_results=self.FALLBACK_MAX_RESULTS)
@@ -386,6 +387,30 @@ class QMDBridge:
             self._run_qmd(["embed", "-f"])
         
         return success
+    
+    def delete_node(self, node_id: str) -> bool:
+        """從 QMD 中刪除特定節點 (防禦『資料幽靈』)"""
+        # QMD CLI 刪除指令 (假設支援 qmd delete <node_id> 或透過移除原檔後 update)
+        # 由於原始碼使用 `--mask *.md` 載入 temp_dir，刪除策略為：
+        # 將該檔案從 collection 中移除並 update
+        # 若 qmd 支援: qmd collection remove-doc -c <name> <doc_id>
+        print(f"🗑️  正在從 QMD 中移除幽靈節點: {node_id}")
+        
+        # 備用方案：找到含有該 node_id 的 cache file 並刪除，然後重新 update
+        temp_dir = Path.home() / ".cache" / "sacred-essence" / "qmd-sync"
+        deleted_files = 0
+        if temp_dir.exists():
+            for f in temp_dir.glob(f"*_{node_id}_*.md"):
+                f.unlink()
+                deleted_files += 1
+                
+        if deleted_files > 0 and self.collection_exists():
+            # 重新更新索引，被刪除的檔案就會從 QMD 消失
+            success, _ = self._run_qmd(["update"])
+            if success:
+                self._run_qmd(["embed", "-f"])
+                return True
+        return False
     
     def _is_node_synced(self, node_id: str, content: str) -> bool:
         """檢查節點是否已同步且內容未變"""

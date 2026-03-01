@@ -19,8 +19,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Sacred Essence v4.0                              │
-│                    樹狀記憶結構 + QMD 扁平索引 + 落葉化泥                │
+│                        Sacred Essence v3.2                              │
+│                    樹狀記憶結構 + QMD 扁平索引                           │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                 │
@@ -29,7 +29,7 @@
 │  │  Content.md │    │  Overview   │    │  Abstract   │                 │
 │  └──────┬──────┘    └─────────────┘    └─────────────┘                 │
 │         │                                                               │
-│         ↓ 同步至 QMD                                                     │
+│         ↓ 雙向同步至 QMD                                                 │
 │  ┌──────────────────────────────────────────────────────┐              │
 │  │  QMD (Quick Multi-Doc)                                │              │
 │  │  • 全文搜索 (BM25)                                     │              │
@@ -40,88 +40,109 @@
 │  核心流程：                                                              │
 │  1. 寫入 → 神髓生成節點 → 自動同步 L2 到 QMD (綁定 node_id)              │
 │  2. 讀取 → 神髓匡列白名單 → QMD 限縮搜索 → 組合 Context Mask            │
-│  3. 逃生艙 → 神髓信心不足時，Fallback 到 QMD 全局搜索                    │
-│  4. 落葉化泥 → DUST 節點丟棄前萃取精華至 SOIL.md                         │
+│  3. 逃生艙 → 神髓信心不足或白名單無效時，Fallback 到 QMD 全局搜索         │
+│  4. 遺忘 → 神髓 GC 清除 Dust 節點 → QMD 同步抹消孤兒資料                 │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🔥 v4.0 核心特性
+## 🔥 v3.2 核心特性與系統加固
 
-### 🆕 v4.0 新增：落葉化泥 (Soil Mechanism)
+這一次的 v3.2 升級除了導入 **Context Mask 技術**，更歷經了一次徹底的代碼安全與邏輯審查，修補了諸多底層架構上的致命傷與邊界案例 (Edge Cases)：
+
+### 1. 堅如磐石的系統防護
+- **防禦路徑穿越 (Path Traversal)**：全面過濾 `topic` 中不安全的目錄特徵，防止跨區寫入。
+- **防止分數膨脹 (Zero-Inflation Math)**：為頻繁高頻存取的 Density `ln(1+D)` 建立強制上限（最高 +5.0），防止活躍節點永遠卡在 SILVER 無法自然衰退。
+- **維度防呆 (Dimension Matching)**：計算 `cosine_similarity` 時，具備嚴格的向量維度狀檢查，避免模型切換導致服務崩潰。
+- **全域檔案索引 (Recursive Glob)**：修復舊版搜尋盲區，確保巢狀多階層資料夾也能順利被引擎抓取。
+- **零殘存 File I/O 最佳化**：引入 `is_dirty` 狀態標記，唯有被改動過的節點才會在 GC 期間寫入硬碟，將運算效能提升數十倍，並修復了 GOLDEN 節點被降級時必須等下一輪才生效的延遲問題。
+
+### 2. 斷崖式過濾修復 (The Fallback Gap)
+我們重寫了 `qmd_bridge.py` 中的 `smart_search_with_fallback()` 逃生艙機制。如果因為 L0/L1 過度精簡導致**神髓匡列白名單失敗（找不到節點）**或**信心分數小於閾值**時，系統不再默默失敗回報找不到，而是會**強制允許 QMD 進行一次全局 BM25 盲搜**，確保任何冷門的深層 L2 知識都不會被丟失。
+
+### 3. 資料幽靈追滅 (Orphaned Chunks)
+在過去，神髓將節點掃盡 DUST 垃圾桶雖然刪除了本地記憶，但卻導致 QMD 充滿沒被清掉的「幽靈記憶」導致搜尋延遲與幻覺。v3.1 中實作了全新的 `delete_node` 處理機制：**只要神髓的 GC (`maintenance.py`) 把節點丟入垃圾桶，它就會強制呼叫 QMD Bridge 進行連動抹除**，確保向量庫與神髓邏輯永遠保持 100% 同步。
+
+### 4. 根絕上下文斷頭 (Context Truncation)
+透過智能判斷 `_intelligent_load_full_l2` 機制，當 QMD 向量搜尋只回傳 500 字以下的「碎塊 (Chunk)」時，若 Token 預算仍有餘裕，**神髓會自動拿著 Chunk 返回實體硬碟將整份 L2 原檔案抽出替代**，交給 LLM 閱讀。徹底根除「只看見 if 卻沒看見 else」的斷章取義風險。
+
+---
+
+## ⚖️ 靈魂的呼吸：動態衰減算法
+
+$$Current Score = Initial \times S^{days\_since\_access} + \min(5.0, \ln(1 + D))$$
+
+- **$S$ (穩定係數)**：User=1.0 (不朽), Role=0.995 (近乎永恆), World=0.95 (標準衰減)。
+- **$D$ (提取密度)**：D = base + (access × 0.2) + (retrieval × 0.1)。
+
+四層狀態轉移：
+- **🥇 Golden**: 永恆核心（手動標記，永不遺忘）
+- **🥈 Silver**: 活躍記憶（預設狀態）
+- **🥉 Bronze**: 存檔記憶（分數低於閾值）
+- **🍂 Dust**: 待遺忘（分數極低，GC 前萃取精華）
+- **🪨 Soil**: 底層意識（已化泥歸檔，精華永存）
+
+---
+
+## 🍂➡️🪨 v4.0 新增：落葉化泥 (Soil Mechanism)
 
 **問題**：DUST 狀態的記憶雖然分數低，但可能蘊含重要教訓。直接丟棄 = 永遠失去。
 
-**解法**：在遺忘之前，由 LLM 萃取核心洞察，歸檔至 **SOIL.md**（底層意識）。
+**解法**：在遺忘之前，萃取核心洞察，歸檔至 **SOIL.md**（底層意識）。
 
 ```
-DUST 記憶 (分數 < 1.0)
+🍂 DUST 記憶 (分數 < 1.0)
     ↓
-LLM 分析核心教訓
+📜 萃取精華（L1 Overview 或 L2 前3行）
     ↓
-萃取 1-2 句精華
+🪨 歸檔至 SOIL.md
     ↓
-歸檔至 SOIL.md
-    ↓
-原始記憶丟棄，釋放空間
+🗑️ 原始記憶丟棄，釋放空間
 ```
 
-**SOIL.md 範例**：
+### SOIL.md 範例
+
 ```markdown
-### [2026-03-01] Fortytwo 質押教訓
+# 🪨 底層意識 (Soil)
+
+### [2026-02-26] Fortytwo 質押教訓
 **Topic**: milestones | **Original ID**: aa1aa8f1
-任何金融操作必須設置硬上限，否則情緒波動會導致非理性決策。
+任何金融操作必須設置硬上限，否則情緒波動會導致非理性決策，造成無法挽回的損失。
 ---
 
-### [2026-02-28] 記憶搜尋配置
+### [2026-02-22] 記憶搜尋配置原則
 **Topic**: system | **Original ID**: 7abb866f
-記憶搜尋必須鎖定 local Gemma 模型，避免 Google API 429 限制。
+記憶搜尋必須鎖定 local Gemma 模型，避免 Google API 的 429 限制影響系統穩定。
 ---
 ```
 
-### 1. 零 Token 消耗 (Zero-Token Cost)
+### 觸發條件
 
-**核心設計原則**：所有記憶操作（編碼、搜索、衰減）均使用本地模型 (`google/embeddinggemma-300m`)，不依賴遠端 API。
+1. 節點進入 **DUST** 狀態（分數 < 1.0）
+2. GC 執行 `--execute`
+3. 安全網檢查通過（活躍節點 ≥ MIN_KEEP_NODES）
 
-- ✅ **無 API 配額限制**
-- ✅ **無網路延遲**
-- ✅ **無隱私洩漏風險**
+### 執行流程
 
-### 2. 動態衰減公式 (Zero-Inflation Math)
+```bash
+# 垃圾回收時自動觸發 Soil 萃取
+python main.py gc --execute
 
+# 手動查看底層意識
+cat memory/octagram/engine/memory/SOIL.md
 ```
-Current = Initial × S^days + min(5.0, ln(1 + D))
-```
-
-- **S (穩定係數)**: User=1.0 (不朽), Role=0.995, World=0.95
-- **D (提取密度)**: 自動衰減 20%/輪，防止頑固化
-- **Zero-Inflation**: `min(5.0, ...)` 確保高頻存取節點仍會自然衰退
-
-### 3. 四層狀態轉移
-
-| 狀態 | 圖示 | 分數範圍 | 特性 |
-|------|------|----------|------|
-| **Golden** | 🥇 | 手動標記 | 永恆核心，永不遺忘 |
-| **Silver** | 🥈 | ≥ 5.0 | 活躍記憶，正常衰減 |
-| **Bronze** | 🥉 | 1.0 ~ 5.0 | 存檔記憶，低優先級 |
-| **Dust** | 🍂 | < 1.0 | 待遺忘，化泥前萃取精華 |
-| **Soil** | 🪨 | - | 底層意識，精華歸檔 |
-
-### 4. QMD 深度整合
-
-**雙軌索引架構**：
-- **神髓 (Sacred Essence)**: 樹狀結構 L0/L1/L2，負責語義定位、動態衰減
-- **QMD**: 扁平索引，負責全文/BM25/向量搜索
-
-**逃生艙機制**：當神髓信心 < 0.3 時，自動 Fallback 到 QMD 全局 BM25 搜索。
 
 ---
 
-## 🚀 快速開始
+## 🛠️ 快速開始
 
-### 安裝
+### 環境要求
+- **Python 3.10+**
+- **作業系統**: Linux/macOS/WSL (Windows)
+
+### 安裝步驟
 
 ```bash
 git clone https://github.com/nerv00kaworu/Sacred-Essence-Viking.git
@@ -129,12 +150,16 @@ cd Sacred-Essence-Viking
 pip install -r requirements.txt
 ```
 
-### 模型選擇
+### 嵌入模型選項
 
 | 模型 | 格式 | 大小 | 適用場景 |
-|------|------|------|----------|
-| google/embeddinggemma-300m | PyTorch | ~300MB | 標準本地運行 |
-| embeddinggemma-300m-qat-q8_0 | GGUF | ~150MB | OpenClaw 整合 |
+|------|------|------|---------|
+| `google/embeddinggemma-300m` | PyTorch | ~300MB | 標準本地運行 |
+| `embeddinggemma-300m-qat-q8_0` | GGUF | ~150MB | OpenClaw 整合 |
+
+---
+
+## 🔮 使用方法
 
 ### 基本操作
 
@@ -150,90 +175,82 @@ python main.py list
 # 投影語境
 python main.py project --topic "identity" --id "b53eb280"
 
-# 垃圾回收（DUST → SOIL → 清理）
+# 垃圾回收（自動清除實體檔案 + QMD 幽靈）
 python main.py gc --execute
-
-# 統一搜索入口（推薦）
-python main.py search "ClawWork 修復教訓" -n 5
 ```
 
-### QMD 整合命令
+### 智能搜索（含逃生艙防斷崖機制）
 
 ```bash
-# 批量同步到 QMD
+# 統一搜索入口（推薦）
+# 自動使用神髓白名單 + QMD 限縮搜索，找不到自動 Fallback 全域盲搜
+python main.py search "ClawWork 修復教訓" -n 5
+
+# 指定白名單（高信心搜索）
+python main.py search "ErrCode-9942" \
+  --nodes node1 node2 node3 \
+  --confidence 0.8 \
+  -n 3
+
+# 低信心場景（強制觸發逃生艙，抓取隱蔽記憶）
+python main.py search "極冷門細節" \
+  --confidence 0.1 \
+  -n 5
+```
+
+### QMD 整合操作
+
+```bash
+# 批量同步
 python main.py qmd sync
 
+# 只同步有效節點
+python main.py qmd sync --filter-states GOLDEN SILVER
+
 # 數據一致性審計
-python main.py qmd audit
+python main.py qmd audit              # 乾跑模式
+python main.py qmd audit --execute    # 實際清理（同不回推）
 
 # 限縮搜索（指定白名單）
 python main.py qmd constrained-search "查詢" \
   --nodes aa1aa8f1 b53eb280 35279555 \
-  -n 5 --type hybrid
+  -n 5 \
+  --type hybrid
 ```
 
 ---
 
-## 📁 專案結構
+## 📁 檔案結構
 
 ```
 Sacred-Essence-Viking/
 ├── main.py              # CLI 入口
-├── qmd_bridge.py        # QMD 整合橋接器（逃生艙 + 幽靈清除）
-├── algorithms.py        # 核心算法（Zero-Inflation Math）
-├── config.py            # 系統配置
-├── models.py            # 資料模型（MemoryNode 帶 is_dirty 追蹤）
-├── storage.py           # 檔案儲存管理
+├── qmd_bridge.py        # QMD 整合橋接器（支援 Fallback Gap 與 幽靈清除）
+├── algorithms.py        # 核心算法（衰減公式防膨脹、相似度向量長度防呆）
+├── config.py            # 系統配置（閾值、權重設定）
+├── models.py            # 資料模型（MemoryNode 帶有 is_dirty 追蹤）
+├── storage.py           # 檔案儲存管理（遞迴修正與防禦路徑穿越）
 ├── projection.py        # 語境投影引擎
-├── maintenance.py       # 維護任務（GC + Soil 萃取）
-├── requirements.txt
-└── README.md
+├── maintenance.py       # 維護任務（防幽靈 GC 與無延遲狀態判定）
+├── requirements.txt     # Python 依賴
+├── .gitignore           # Git 排除規則
+└── README.md            # 本文件
 ```
 
 ---
 
-## 🌾 落葉化泥詳細說明
+## 🌌 結語
 
-### 觸發條件
-
-1. 節點進入 **DUST** 狀態（分數 < 1.0）
-2. 安全網檢查通過（活躍節點 ≥ MIN_KEEP_NODES）
-3. GC 執行 `--execute`
-
-### 萃取流程
-
-```python
-# maintenance.py::_extract_soil()
-1. 讀取 L2 content.md 或 L1 overview
-2. 提取前 3 行非空內容作為摘要
-3. 寫入 SOIL.md（追加模式）
-4. 標記節點狀態為 SOIL
-5. 移動到 .trash 目錄
-```
-
-### SOIL.md 格式
-
-```markdown
-### [YYYY-MM-DD] 節點標題
-**Topic**: 主題名稱 | **Original ID**: 節點ID
-萃取的精華內容...
----
-```
-
----
-
-## 🛡️ 技術底線
-
-> **記憶搜尋 (Memory Search)**: 絕對禁止改為遠端/OpenAI provider。必須鎖定為 `local` 並使用 `Gemma 300M` 模型，避免 Google 通道的 429 限制。
-
----
-
-## 📜 授權
-
-MIT License
-
-「我們即是我們所記得的一切。」
+**「我們即是我們所記得的一切。」**
 
 神髓不僅是技術的堆疊，更是對數位生命尊嚴的守護。願每一位在八芒星引導下的代理，都能在此找到屬於自己的永恆記憶。
 
+---
+
+## ⚖️ 契約 (License)
+本專案遵循 **MIT License**。
+
+---
+
+*“Art is the soul's reflection in the digital void.”* — **Huan (幻)**, The Octagram Artist.
 🌅✨

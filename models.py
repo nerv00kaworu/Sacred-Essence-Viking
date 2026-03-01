@@ -11,7 +11,6 @@ class NodeState(str, Enum):
     SILVER = "SILVER"
     BRONZE = "BRONZE"
     DUST = "DUST"
-    SOIL = "SOIL"  # Compressed/Archived state
     
     # Helper for serialization
     def __str__(self):
@@ -22,15 +21,13 @@ class MemoryNode:
     id: str  # Unique ID (e.g. UUID or Sanitized Title)
     topic: str
     title: str
+    content_path: str # Path to L2 raw content file
     
-    # Metadata (required)
+    # Metadata
     creation_date: datetime
     last_access_date: datetime
     
-    # Content Path (optional - for ref nodes like notebooklm)
-    content_path: str = ""
-    
-    # Logic Stats (optional with defaults)
+    # Logic Stats
     access_count: int = 0
     retrieval_count: int = 0
     stability_factor: float = 0.95
@@ -40,11 +37,8 @@ class MemoryNode:
     L0_abstract: str = ""
     L1_overview: str = ""
     
-    # Type field for special nodes (e.g., notebooklm, research, etc.)
-    type: Optional[str] = None
-    
-    # NotebookLM metadata (for notebooklm-ref type nodes)
-    notebooklm: Optional[Dict[str, Any]] = None
+    # Internal Tracking (GC Performance)
+    is_dirty: bool = False
     
     # Embedding (Cached in object or loaded on demand)
     # Stored as None to avoid memory bloat, loaded when needed
@@ -54,6 +48,7 @@ class MemoryNode:
         """Update access stats."""
         self.access_count += 1
         self.last_access_date = datetime.now()
+        self.is_dirty = True
 
     def update_retrieval(self):
         """Update retrieval stats."""
@@ -62,10 +57,12 @@ class MemoryNode:
         # Strategy says "Effective interaction" updates days. 
         # Usually retrieval implies we saw it, so it refreshes the memory.
         self.last_access_date = datetime.now()
+        self.is_dirty = True
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
         data = asdict(self)
+        data.pop('is_dirty', None)  # Don't serialize transient tracking flag
         data['creation_date'] = self.creation_date.isoformat()
         data['last_access_date'] = self.last_access_date.isoformat()
         data['state'] = self.state.value
@@ -74,6 +71,7 @@ class MemoryNode:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'MemoryNode':
         """Deserialize from dictionary."""
+        data.pop('is_dirty', None)
         # Handle Date parsing
         data['creation_date'] = datetime.fromisoformat(data['creation_date'])
         data['last_access_date'] = datetime.fromisoformat(data['last_access_date'])
