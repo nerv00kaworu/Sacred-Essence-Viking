@@ -133,6 +133,16 @@ python main.py search "冷門" --confidence 0.1
 
 **逃生艙機制**：當神髓的白名單搜索信心不足時，自動 fallback 到 QMD 全局搜索，確保不遺漏任何記憶。
 
+### 自我降噪機制 (Auto-Merge)
+
+編碼新記憶時，系統會自動檢測相似度：
+
+- **相似度 ≥ 0.85**：自動合併，疊加存取次數（不創建冗餘檔案）
+- **相似度 ≥ 0.75**：標記為潛在重複，提醒審查
+- **相似度 < 0.75**：創建新節點
+
+這確保長期自動收錄資料時，記憶庫不會充斥重複內容。
+
 ### QMD 整合
 
 ```bash
@@ -146,6 +156,35 @@ python main.py qmd audit --execute
 python main.py qmd constrained-search "查詢" \
   --nodes id1 id2 id3
 ```
+
+### 垃圾回收 (GC)
+
+```bash
+# 1. 預覽模式（預設）- 安全查看即將發生的變化
+python main.py gc
+# 輸出範例：
+# 📊 GC 預覽報告
+# - 3 個節點將降級為 BRONZE
+# - 2 個節點將進入 DUST（準備化泥）
+# - 預計釋放 15KB 空間
+
+# 2. 確認無誤後，正式執行
+python main.py gc --execute
+```
+
+**Dry Run 防呆設計**：預設只預覽不執行，避免誤刪重要記憶。
+
+### 幽靈清道夫 (Audit)
+
+雙軌制 (Markdown + QMD) 可能產生狀態不同步：
+
+```bash
+# 檢查並清理孤兒數據
+python main.py qmd audit        # 乾跑預覽
+python main.py qmd audit --execute  # 實際清理
+```
+
+**機制**：自動比對 QMD SQLite 索引與實體 Markdown 檔案。若發現 QMD 中有、但實體已被 GC 的「幽靈數據」，自動刪除，確保雙軌狀態 100% 同步。
 
 ### 自動化
 
