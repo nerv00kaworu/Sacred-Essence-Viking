@@ -1,214 +1,204 @@
 # 🌌 Sacred Essence (神髓) v5.0
 
-**A markdown-first, local-first memory architecture for AI agents.**
+**Sacred Essence is a long-term memory system for AI agents.**
 
-Sacred Essence is not just a storage layer, and not just a vector search wrapper.
-It is a **memory system with structure, decay, distillation, and human readability built in**.
+It stores memories as Markdown, summarizes them into layered representations, lets you search and reconstruct context later, and gradually decays low-value memories into distilled residue instead of keeping everything forever.
 
-> Keep memories readable.
-> Keep retrieval local when possible.
-> Let forgetting become refinement instead of silent loss.
+In one sentence:
 
-This repository is the **public / de-sensitive edition** of Sacred Essence.
-It reflects the current architectural direction without exposing private deployment details, personal runtime data, or machine-specific paths.
+> **Sacred Essence helps an AI agent turn raw events into searchable, human-readable, long-term memory.**
 
 ---
 
-## Why Sacred Essence exists
+## What problem does this system solve?
 
-Most agent memory systems optimize for one thing:
+Most agents only have one of these:
 
-- store more
-- retrieve faster
-- auto-capture harder
+- short chat history
+- a vector database full of opaque chunks
+- a notes folder that keeps growing forever
 
-Sacred Essence was built around a different question:
+That creates four problems:
 
-> **How should an agent remember if memory is meant to stay useful, inspectable, and evolvable over time?**
+1. **No real long-term memory**  
+   Important things get buried in old conversations.
 
-That leads to a different design:
+2. **No human-readable memory source**  
+   If memory only lives inside embeddings or a database, it becomes hard to inspect, edit, or trust.
 
-- **Markdown-first** instead of database-only
-- **Layered projection** instead of full-context dumping
-- **Lifecycle management** instead of infinite hoarding
-- **Local-first retrieval** instead of API dependency by default
-- **Distillation** instead of blunt deletion
+3. **No memory lifecycle**  
+   Everything is stored forever, so retrieval quality gets worse over time.
 
----
+4. **No distillation**  
+   Old memories are either kept forever or deleted entirely. There is no middle ground.
 
-## What Sacred Essence is
-
-Sacred Essence is a memory architecture for agents that need:
-
-- long-running continuity
-- project memory
-- stable lessons over time
-- human-readable memory artifacts
-- local retrieval with portable data ownership
-
-It is especially useful when you want memory to be:
-
-- **editable by humans**
-- **searchable by machines**
-- **resilient across sessions**
-- **portable across environments**
-- **capable of forgetting without losing all value**
+Sacred Essence is built to solve exactly that.
 
 ---
 
-## Core ideas
+## What does Sacred Essence actually do?
 
-## 1. Markdown is the source of truth
+Sacred Essence does five main things:
 
-Memories are stored as files, not hidden behind a black-box service.
+### 1. Store memories as Markdown
+Every memory is kept as a readable file instead of disappearing into a black box.
 
-That means:
+### 2. Project memories into layers
+Each memory can be represented as:
 
-- you can read them directly
-- you can diff them
-- you can back them up with normal tools
-- you can rebuild indexes without losing the memory itself
+- **L0** — tiny semantic abstract
+- **L1** — structured overview
+- **L2** — full content
 
-This is a deliberate choice.
+This lets an agent recall cheaply first, then load more detail only when needed.
 
-Sacred Essence assumes that long-term memory should remain inspectable.
+### 3. Search and reconstruct context
+You can search by meaning, keyword, or constrained scope, then project the relevant memory back into usable context.
 
----
+### 4. Decay stale memories over time
+Not every memory should remain equally important forever.
+Sacred Essence gradually downgrades less useful memories.
 
-## 2. Memory has layers
+### 5. Distill dying memories into SOIL
+Before a weak memory disappears, the system can keep its final lesson as a distilled residue.
 
-Not every recall needs the full document.
+So instead of this:
 
-Sacred Essence uses a three-layer projection model:
+- keep everything forever
+- or delete everything brutally
 
-- **L0 / Abstract** — the semantic core
-- **L1 / Overview** — a structured summary
-- **L2 / Content** — the full narrative or raw memory
+it does this:
 
-This allows an agent to:
-
-- keep only small memory anchors near the surface
-- load broader context when needed
-- fetch full detail only when necessary
-
-In practice:
-
-- **L0** is what helps orientation
-- **L1** is what helps decision framing
-- **L2** is what helps deep reconstruction
+- keep what matters
+- cool what fades
+- distill what is still worth preserving
 
 ---
 
-## 3. Memory has a lifecycle
+## How the system works
 
-Sacred Essence treats memory as something alive.
-
-A memory should not stay equally important forever.
-Some memories should remain core. Some should cool. Some should fade. Some should leave behind only their residue.
-
-The canonical lifecycle is:
+At a high level, Sacred Essence works like this:
 
 ```text
-GOLDEN  -> manually protected core memory
-SILVER  -> active / recently useful memory
-BRONZE  -> background / cooling memory
-DUST    -> near-forgetting memory
-SOIL    -> distilled residue before permanent loss
+Raw event / note
+   ↓
+Encode into memory node
+   ↓
+Store as Markdown (human-readable source)
+   ↓
+Generate L0 / L1 / L2 projections
+   ↓
+Retrieve later by search / projection
+   ↓
+Decay over time if no longer useful
+   ↓
+Distill to SOIL before final removal
 ```
 
-This model allows the system to do something most memory systems do badly:
+This gives you a memory system that is:
 
-> **forget with dignity**
-
----
-
-## 4. Forgetting is refinement, not failure
-
-When a memory falls toward irrelevance, Sacred Essence does not treat that as pure deletion.
-
-Instead, it can distill the durable lesson into **SOIL**:
-
-- the full detail can disappear
-- the useful residue remains
-- the system becomes lighter without becoming emptier
-
-This is one of the philosophical cores of the project.
-
-The point is not to preserve every sentence forever.
-The point is to preserve what still matters.
+- readable
+- searchable
+- compactable
+- decay-aware
+- rebuildable if the retrieval layer changes
 
 ---
 
-## 5. Retrieval should be local-first and swappable
+## Memory lifecycle
 
-Sacred Essence is designed so the memory artifacts remain stable even if the retrieval layer changes.
+Sacred Essence uses a lifecycle model instead of infinite storage.
 
-That means:
+```text
+GOLDEN  -> protected core memory
+SILVER  -> active memory
+BRONZE  -> cooling memory
+DUST    -> near-forgetting memory
+SOIL    -> distilled residue
+```
 
-- markdown stays the canonical record
-- local indexing can be rebuilt
-- retrieval backends can evolve over time
-- the system is not locked to one SaaS provider
+### What these states mean
 
-This repo includes an optional local bridge for index-assisted search workflows.
+- **GOLDEN**  
+  Core memories you want to preserve deliberately.
 
-The larger principle is:
+- **SILVER**  
+  Active memories that are still useful in current work.
 
-> **retrieval engines are replaceable; memory artifacts are not**
+- **BRONZE**  
+  Older memories that still exist but matter less.
 
----
+- **DUST**  
+  Memories close to being forgotten.
 
-## 6. Memory is not only retrieval — it is governance
+- **SOIL**  
+  The final residue: not full detail, but the durable lesson.
 
-A lot of memory tools answer only one question:
-
-- “How do I retrieve the most relevant chunk?”
-
-Sacred Essence also cares about:
-
-- what deserves to be remembered
-- how memory should cool down over time
-- how stable lessons differ from raw notes
-- how to preserve continuity without preserving noise forever
-
-So this project should be read as:
-
-- a memory substrate
-- a memory lifecycle model
-- a memory governance pattern
-
-—not merely a search utility.
+This is one of the main differences between Sacred Essence and ordinary note storage.
 
 ---
 
-## Feature overview
+## Why Markdown?
 
-### Memory representation
-- markdown-first storage
-- L0 / L1 / L2 layered projection
-- human-readable memory artifacts
+Sacred Essence chooses Markdown on purpose.
 
-### Lifecycle management
-- decay-aware state transitions
-- GOLDEN / SILVER / BRONZE / DUST / SOIL model
-- garbage collection with dry-run support
-- residue-preserving archival pattern
+Because long-term memory should be:
 
-### Retrieval model
-- local-first search workflow
-- optional index bridge
-- constrained search with fallback patterns
-- duplicate detection / merge heuristics
+- human-readable
+- diffable
+- easy to back up
+- portable across tools
+- not locked into one vendor or one index format
 
-### Operational philosophy
-- portable memory ownership
-- inspectable artifacts
-- low dependency on remote APIs by default
-- retrieval layer can evolve without rewriting memory itself
+The Markdown files are the **source of truth**.
+
+Any retrieval/index layer is secondary and can be rebuilt.
 
 ---
 
-## Quick start
+## Why layered memory?
+
+If every recall always loads the full memory, token cost and noise go up quickly.
+
+Layered memory fixes that.
+
+### L0 — Abstract
+A very small semantic anchor.
+Good for orientation.
+
+### L1 — Overview
+A structured summary.
+Good for deciding whether this memory matters.
+
+### L2 — Content
+The full original memory.
+Good for deep reconstruction.
+
+This lets an agent do staged recall instead of blindly dumping everything into context.
+
+---
+
+## Example use cases
+
+Sacred Essence is useful when an agent needs to remember things like:
+
+- project decisions
+- technical lessons
+- user preferences
+- repeated mistakes
+- distilled insights from long work sessions
+- stable facts that should survive across sessions
+
+Examples:
+
+- “Why did we choose queue-first retries?”
+- “What was the final lesson from that failed deployment?”
+- “What matters from a month of research, without loading all raw logs?”
+- “What should still remain after the detailed context has faded?”
+
+---
+
+## CLI usage
 
 ### Install
 
@@ -218,68 +208,47 @@ cd Sacred-Essence-Viking
 pip install -r requirements.txt
 ```
 
-### Basic usage
+### Encode a memory
 
 ```bash
-# Encode a memory
 python main.py encode \
   --topic "project" \
   --title "Retry architecture" \
   --content "We chose queue-first retries to reduce partial failure risk."
+```
 
-# List all memories
+### List memories
+
+```bash
 python main.py list
+python main.py list --topic project
+```
 
-# Search
+### Search memories
+
+```bash
 python main.py search "retry queue" -n 5
-
-# Preview garbage collection
-python main.py gc
-
-# Execute garbage collection
-python main.py gc --execute
 ```
 
----
-
-## CLI
-
-## Encode
+### Reconstruct a memory
 
 ```bash
-python main.py encode \
-  --topic "architecture" \
-  --title "Schema decision" \
-  --content "..."
+python main.py project --topic project --id abc12345
 ```
 
-## List
-
-```bash
-python main.py list
-python main.py list --topic architecture
-```
-
-## Project / reconstruct context
-
-```bash
-python main.py project --topic architecture --id abc12345
-```
-
-## Search
-
-```bash
-python main.py search "migration strategy" -n 5
-```
-
-## Garbage collection
+### Preview garbage collection
 
 ```bash
 python main.py gc
+```
+
+### Execute garbage collection
+
+```bash
 python main.py gc --execute
 ```
 
-## Optional local index integration
+### Optional local index integration
 
 ```bash
 python main.py qmd sync
@@ -290,132 +259,93 @@ python main.py qmd constrained-search "retry" --nodes id1 id2 id3
 
 ---
 
+## What makes Sacred Essence different?
+
+### It is not just a notes folder
+Because it has:
+
+- memory states
+- decay
+- projection
+- retrieval workflow
+- distillation before deletion
+
+### It is not just a vector DB wrapper
+Because the memory itself remains:
+
+- readable
+- structured
+- portable
+- inspectable by humans
+
+### It is not just RAG
+Because it does more than retrieve chunks.
+It manages **memory quality over time**.
+
+That is the real point of the system.
+
+---
+
+## Architecture in plain English
+
+Think of Sacred Essence as five layers:
+
+1. **Memory artifact layer**  
+   Markdown files that hold the actual memory.
+
+2. **Projection layer**  
+   L0 / L1 / L2 summaries for staged recall.
+
+3. **Retrieval layer**  
+   Search, constrained recall, optional local index support.
+
+4. **Lifecycle layer**  
+   Downgrade, decay, garbage collection, SOIL distillation.
+
+5. **Governance layer**  
+   The rules for what should stay, what should cool, and what should be reduced to residue.
+
+That is why Sacred Essence is better described as a **memory system** than as a search feature.
+
+---
+
 ## Configuration
 
-The public version removes machine-specific hard-coded paths.
+The public version avoids machine-specific hard-coded paths.
 
-Use environment variables when needed:
+You can override paths with environment variables:
 
-- `SACRED_ESSENCE_MEMORY_DIR` — base memory directory override
-- `SACRED_ESSENCE_TOPICS_DIR` — topics directory override for the search bridge
-- `QMD_BIN` — local QMD executable path override
+- `SACRED_ESSENCE_MEMORY_DIR`
+- `SACRED_ESSENCE_TOPICS_DIR`
+- `QMD_BIN`
 
 If unset, the project falls back to local defaults where possible.
 
 ---
 
-## Recommended mental model
+## Public repo scope
 
-Think of Sacred Essence as five layers working together:
+This public repository includes the portable architecture and public-safe code shape.
 
-1. **Memory artifact layer** — markdown files as the durable substrate
-2. **Projection layer** — L0 / L1 / L2 for token-efficient recall
-3. **Lifecycle layer** — decay, downgrade, distillation, cleanup
-4. **Retrieval layer** — local search, constrained recall, optional indexing
-5. **Governance layer** — deciding what should remain core versus what should cool and disappear
+It intentionally excludes things like:
 
-This is why Sacred Essence is stronger than a plain vector-memory demo.
-It is designed for continuity, not just retrieval benchmarks.
-
----
-
-## What this public repo intentionally excludes
-
-This repository does **not** include private operational state such as:
-
-- personal runtime memory contents
-- deployment-specific automation
-- private production paths
-- secrets or credentials
-- machine-specific scheduler setup
-- internal team context unrelated to the public architecture
-
-If you adapt Sacred Essence for your own environment, you should provide your own:
-
-- memory directory layout
-- scheduler / automation integration
-- backup strategy
-- retrieval backend runtime
-- deployment safety policy
+- private runtime memory contents
+- machine-specific deployment details
+- secrets and credentials
+- private scheduler / automation state
+- internal team-specific operational context
 
 ---
 
-## Suggested usage pattern
+## In short
 
-A practical pattern is:
+Sacred Essence is for people who want agent memory to be:
 
-- use Sacred Essence to store durable memory artifacts
-- use summaries / projections for lightweight recall
-- use local indexing only as an accelerator
-- let garbage collection reduce dead weight over time
-- treat SOIL as distilled residue, not as clutter
-
-This keeps the system readable and sustainable as it grows.
-
----
-
-## What v5.0 means
-
-Version 5.0 is less about adding one flashy mechanism and more about clarifying the project’s real identity:
-
-> **Sacred Essence is a memory governance system with a local retrieval spine.**
-
-That means the project is now described publicly in terms of:
-
-- durable architecture
-- inspectable memory artifacts
-- lifecycle design
-- de-sensitive portability
-- separation between memory truth and retrieval machinery
-
-In short:
-
-- memory remains readable
-- retrieval remains flexible
-- forgetting becomes part of design
-- the system stays portable and sane
-
----
-
-## Repository hygiene
-
-Before publishing or extending this project, keep these outside version control unless intentionally public:
-
-- generated memory files
-- local indexes / vector caches
-- logs
-- env files
-- private notes
-- runtime-produced SOIL contents
-
-The included `.gitignore` assumes this workflow.
-
----
-
-## Roadmap directions
-
-Natural next steps for the public version could include:
-
-- clearer schema docs for memory nodes
-- pluggable retrieval backends
-- promotion pipeline docs (raw → candidate → verified → core)
-- better examples for multi-agent usage
-- packaging improvements
-- public test fixtures separated from runtime assumptions
-
----
-
-## Final note
-
-If you only want a fast auto-recall plug-in, Sacred Essence may feel unusually opinionated.
-That is intentional.
-
-Sacred Essence is for people who believe agent memory should be:
-
-- durable
-- inspectable
-- local-first
+- long-term
+- human-readable
+- searchable
 - layered
+- decay-aware
 - capable of graceful forgetting
 
-If that tradeoff matches your values, this architecture will make sense.
+If you want a system that turns raw events into durable memory instead of just piling up more text, that is what Sacred Essence is for.
