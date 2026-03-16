@@ -178,6 +178,75 @@ This lets an agent do staged recall instead of blindly dumping everything into c
 
 ---
 
+## How Sacred Essence fits into a larger memory stack
+
+In practice, Sacred Essence works best as part of a broader agent memory workflow.
+
+A common split looks like this:
+
+- **Daily logs / raw notes**  
+  Short-term event capture, rough notes, and session residue.
+
+- **Handoff / operational memory**  
+  The active workbench: what is in progress, what is blocked, what must be resumed next.
+
+- **Sacred Essence**  
+  Durable structured memory: distilled events, layered recall, long-term lessons, and decay-aware storage.
+
+- **QMD or other local index layer**  
+  Retrieval acceleration: semantic search, constrained search, and fallback lookup across the memory space.
+
+That means Sacred Essence is not trying to replace every file in a workflow.
+It plays the role of the **durable memory core**, while `handoff` handles active continuity and QMD handles faster retrieval.
+
+---
+
+## Where handoff fits
+
+`handoff` is the operational layer.
+
+It answers questions like:
+
+- what is currently being worked on?
+- what is blocked?
+- what should the next agent/session resume first?
+- what still needs validation?
+
+This is different from Sacred Essence.
+
+Sacred Essence stores the longer-lived memory artifact.
+`handoff` stores the **active continuity state**.
+
+A useful rule of thumb is:
+
+- use **handoff** for immediate coordination
+- use **Sacred Essence** for durable memory
+
+---
+
+## Where QMD fits
+
+QMD is not the memory itself.
+It is the **retrieval spine / index layer** that helps surface memory efficiently.
+
+In a typical setup:
+
+- Sacred Essence keeps the canonical memory artifacts in Markdown
+- QMD syncs or indexes those artifacts for faster retrieval
+- search can use QMD as an accelerator without changing the source of truth
+
+This separation matters.
+
+If the index changes, the memory still survives.
+If the memory evolves, the index can be rebuilt.
+
+That is why Sacred Essence and QMD work well together:
+
+- **Sacred Essence** = memory truth
+- **QMD** = retrieval acceleration
+
+---
+
 ## Example use cases
 
 Sacred Essence is useful when an agent needs to remember things like:
@@ -288,24 +357,25 @@ That is the real point of the system.
 
 ## Architecture in plain English
 
-Think of Sacred Essence as five layers:
+Think of the full memory stack like this:
 
-1. **Memory artifact layer**  
-   Markdown files that hold the actual memory.
+1. **Raw notes / daily logs**  
+   Capture events, fragments, and rough session residue.
 
-2. **Projection layer**  
-   L0 / L1 / L2 summaries for staged recall.
+2. **Handoff layer**  
+   Track active tasks, blocked work, and what must resume next.
 
-3. **Retrieval layer**  
-   Search, constrained recall, optional local index support.
+3. **Sacred Essence memory layer**  
+   Store durable Markdown memory with L0 / L1 / L2 structure.
 
-4. **Lifecycle layer**  
-   Downgrade, decay, garbage collection, SOIL distillation.
+4. **QMD / local retrieval layer**  
+   Provide indexing, semantic retrieval, constrained search, and fallback lookup.
 
-5. **Governance layer**  
-   The rules for what should stay, what should cool, and what should be reduced to residue.
+5. **Lifecycle and governance layer**  
+   Decide what remains active, what decays, and what gets distilled into SOIL.
 
-That is why Sacred Essence is better described as a **memory system** than as a search feature.
+Within that stack, Sacred Essence is the durable memory core.
+It is stronger than a simple notes folder, and broader than a pure search feature.
 
 ---
 
