@@ -49,12 +49,15 @@ class QMDBridge:
     
     def __init__(self, collection_name: str = "sacred-l2", memory_dir: Optional[str] = None):
         self.collection_name = collection_name
-        self.qmd_cmd = "qmd"
+        self.qmd_cmd = os.environ.get("QMD_BIN", "qmd")
         self.memory_dir = memory_dir or self._default_memory_dir()
         
     def _default_memory_dir(self) -> str:
-        """預設神髓記憶目錄"""
-        return str(Path.home() / ".openclaw" / "workspace" / "memory" / "octagram" / "engine" / "memory" / "topics")
+        """預設神髓記憶目錄（可由環境變數覆蓋）"""
+        return os.environ.get(
+            "SACRED_ESSENCE_TOPICS_DIR",
+            str(Path(__file__).resolve().parent / "memory" / "topics")
+        )
         
     def _run_qmd(self, args: List[str], timeout: int = None) -> Tuple[bool, str]:
         """執行 QMD 命令並返回結果（支援超時）"""
@@ -361,18 +364,15 @@ class QMDBridge:
         temp_dir = Path.home() / ".cache" / "sacred-essence" / "qmd-sync"
         temp_dir.mkdir(parents=True, exist_ok=True)
         
-        # 使用內容哈希命名，避免重複
-        import hashlib
-        content_hash = hashlib.md5(full_content.encode()).hexdigest()[:8]
-        temp_file = temp_dir / f"{topic}_{node_id}_{content_hash}.md"
+        # 統一命名規範：[TOPIC]_[NODE_ID].md
+        temp_file = temp_dir / f"{topic}_{node_id}.md"
         
         with open(temp_file, 'w', encoding='utf-8') as f:
             f.write(full_content)
         
-        # 清理舊版本
+        # 移除舊的雜湊版本檔案（清理舊時代殘影）
         for old_file in temp_dir.glob(f"{topic}_{node_id}_*.md"):
-            if old_file.name != temp_file.name:
-                old_file.unlink()
+            old_file.unlink()
         
         if not self.collection_exists():
             success, _ = self._run_qmd([
@@ -554,19 +554,16 @@ class QMDBridge:
                 with open(content_file, 'r', encoding='utf-8') as f:
                     content = f.read()
                 
-                # 使用內容哈希避免重複
-                import hashlib
                 metadata_prefix = f"[NODE_ID:{node_id}][TOPIC:{topic}][STATE:{state}]\n"
                 full_content = metadata_prefix + content
-                content_hash = hashlib.md5(full_content.encode()).hexdigest()[:8]
                 
-                sync_file = temp_dir / f"{topic}_{node_id}_{content_hash}.md"
+                # 移除雜湊後綴，使用固定命名：[TOPIC]_[NODE_ID].md
+                sync_file = temp_dir / f"{topic}_{node_id}.md"
                 
-                # 只寫入變更的檔案
-                if not sync_file.exists():
-                    with open(sync_file, 'w', encoding='utf-8') as f:
-                        f.write(full_content)
-                    synced_count += 1
+                # 寫入檔案（直接覆寫，確保唯一性）
+                with open(sync_file, 'w', encoding='utf-8') as f:
+                    f.write(full_content)
+                synced_count += 1
         
         print(f"📦 同步 {synced_count} 個變更的節點到 QMD...")
         

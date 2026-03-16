@@ -1,4 +1,4 @@
-# Sacred Essence v3.1 Data Models
+# Sacred Essence Data Models
 
 from enum import Enum
 from dataclasses import dataclass, field, asdict
@@ -77,4 +77,9 @@ class MemoryNode:
         data['last_access_date'] = datetime.fromisoformat(data['last_access_date'])
         # Handle Enum
         data['state'] = NodeState(data['state'])
-        return cls(**data)
+        
+        # New: Lenient parsing (ignore unknown fields like 'type' or 'notebooklm')
+        valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+        
+        return cls(**filtered_data)

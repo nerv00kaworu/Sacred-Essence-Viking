@@ -40,3 +40,13 @@ Thumbs.db
 memory/
 .trash/
 .cache/
+qmd/
+*.db
+*.sqlite
+*.sqlite3
+*.npy
+*.npz
+*.log
+.env
+.env.*
+*.local

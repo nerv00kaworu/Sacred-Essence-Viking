@@ -1,24 +1,27 @@
-# 🪨 底層意識 (Soil)
+# 🪨 SOIL Template
 
-> 「落葉歸根，化泥護花。」
+> Distilled residue from memories that reached the final decay stage.
 
-此文件收錄從 **DUST** 狀態記憶萃取的精華。
-這些記憶雖然已失去原始細節，但其核心洞察將永遠滋養新的認知。
+This file is kept in the public repository as a **template / example**.
+In a real deployment, it may contain distilled lessons extracted during garbage collection.
+
+If you use Sacred Essence in production, consider keeping runtime-generated SOIL content
+outside version control unless you intentionally want it published.
 
 ---
 
-## 格式說明
+## Suggested entry format
 
 ```markdown
-### [YYYY-MM-DD] 節點標題
-**Topic**: 主題名稱 | **Original ID**: 節點ID
-萃取的精華內容（1-3 句話的核心教訓）
+### [YYYY-MM-DD] Memory Title
+**Topic**: topic-name | **Original ID**: node-id
+One to three sentences capturing the durable lesson or residue.
 ---
 ```
 
 ---
 
-## 內容
+## Example placeholder
 
-*(此處將自動填入 GC 執行時萃取的精華)*
+*(Runtime-generated distilled entries would appear here.)*
 

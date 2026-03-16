@@ -1,8 +1,11 @@
 import sys
+from pathlib import Path
 from datetime import datetime, timedelta
 
-# Mock Config if running outside
-sys.path.append('/home/nerv0/.openclaw/workspace/Sacred-Essence-Viking')
+REPO_DIR = Path(__file__).resolve().parent
+if str(REPO_DIR) not in sys.path:
+    sys.path.append(str(REPO_DIR))
+
 from models import MemoryNode, NodeState
 from algorithms import calculate_importance
 

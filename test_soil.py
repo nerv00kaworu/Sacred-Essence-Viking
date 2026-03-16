@@ -1,8 +1,12 @@
 import sys
 import os
+from pathlib import Path
 from datetime import datetime, timedelta
 
-sys.path.append('/home/nerv0/.openclaw/workspace/Sacred-Essence-Viking')
+REPO_DIR = Path(__file__).resolve().parent
+if str(REPO_DIR) not in sys.path:
+    sys.path.append(str(REPO_DIR))
+
 from models import MemoryNode, NodeState
 from config import TRASH_DIR, MEMORY_DIR
 from maintenance import MaintenanceManager

@@ -1,12 +1,19 @@
-# Sacred Essence v3.1 Configuration
+# Sacred Essence Configuration
 
 import os
 from pathlib import Path
 
 # Base Directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# 正確的記憶目錄在 workspace/memory/octagram/engine/
-MEMORY_DIR = "/home/nerv0/.openclaw/workspace/memory/octagram/engine/memory"
+
+# Public-safe defaults:
+# - Prefer SACRED_ESSENCE_MEMORY_DIR when provided
+# - Otherwise fall back to a local ./memory directory inside the repo
+# This keeps the project portable and avoids leaking machine-specific paths.
+MEMORY_DIR = os.environ.get(
+    "SACRED_ESSENCE_MEMORY_DIR",
+    os.path.join(BASE_DIR, "memory")
+)
 TRASH_DIR = os.path.join(BASE_DIR, ".trash")
 
 # Ensure directories exist (Implementation detail, but config is good place for definitions)
